@@ -1,0 +1,4 @@
+# Only the task fetcher (backend/fetcher.py) needs these; the offline sidecar stays standard library only.
+icalendar==7.3.0
+recurring-ical-events==3.8.2
+certifi==2026.7.22

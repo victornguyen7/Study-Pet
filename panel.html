@@ -45,6 +45,11 @@
         </div>
       </section>
 
+      <section id="schedule" hidden>
+        <h2>Today's schedule</h2>
+        <ol id="events" class="rows"></ol>
+      </section>
+
       <section>
         <div id="task-head" class="row">
           <h2>Tasks</h2>
@@ -86,6 +91,20 @@
       <section>
         <h2>Streak</h2>
         <label>A day counts at <input id="threshold" type="number" min="1" max="1440" required /> min of focus</label>
+      </section>
+      <section>
+        <h2>Imports</h2>
+        <div id="feeds"></div>
+        <button id="sync">Sync now</button>
+        <p class="muted">
+          Read-only, checked every half hour. Canvas: open Calendar, then “Calendar Feed”. Google Calendar: open the
+          calendar's settings, then copy “Secret address in iCal format”. Anyone with an address can read that calendar,
+          so treat it like a password.
+        </p>
+        <p class="muted">
+          No address? In Google Calendar open Settings, “Import &amp; export”, then Export. Unzip the download and
+          upload the .ics file. A file does not update itself: upload a new one when your calendar changes.
+        </p>
       </section>
       <section>
         <h2>Pet</h2>

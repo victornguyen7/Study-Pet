@@ -213,12 +213,12 @@ The pet owns one to-do list. Other apps are read-only feeds, and nothing is ever
 | --- | --- | --- |
 | The pet's own tasks | Native | 2 |
 | Canvas | Calendar feed (ICS) first; an API token later for submission status | 2 |
-| Google Calendar or Outlook | OAuth, read-only | 2 |
+| Google Calendar or Outlook | OAuth, read-only. Until that is built: the calendar's secret iCal address, or an exported .ics file uploaded by hand | 2 |
 | Obsidian | Local markdown files | 6 |
 | Notion, Todoist, Apple Reminders | Read-only API | 6 |
 | Email | Chosen senders only; a local model extracts deadlines; the email itself is not stored | 6 |
 
-**Sync rules**
+**Sync rules** (which of these are built, and where the build falls short, is in `KNOWN_ISSUES.md`)
 
 - Every imported item keeps a stable source ID, so a re-sync never brings back a checked task.
 - A source edit, such as a new due date, updates the pet's copy and keeps its done status.

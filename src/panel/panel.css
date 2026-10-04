@@ -305,6 +305,45 @@ form {
   text-decoration: line-through;
 }
 
+/* ---- today's schedule, and the feed addresses in Settings ---- */
+
+#events li > :last-child {
+  margin-left: 0;
+}
+
+#events .when {
+  flex: none;
+  min-width: 8.5em;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.feed {
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+/* the address gets a row to itself; its buttons wrap underneath */
+.feed input {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.feed p {
+  margin-top: 0;
+  font-size: 13px;
+}
+
+.feed .late {
+  color: #c2452d;
+}
+
+#sync {
+  margin-bottom: 4px;
+}
+
 /* ---- wrap up ---- */
 
 #wrap-streak {

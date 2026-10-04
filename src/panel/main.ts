@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { onStreak, type StreakState } from "../streak";
 import { onTimer, timer } from "../timer";
 
@@ -19,7 +20,21 @@ type Task = {
   due: string | null; // "YYYY-MM-DD"
   estimate_min: number | null;
   done: boolean;
+  source: Source | null; // where it was imported from
+  removed: boolean; // imported, and no longer in its source's feed
 };
+
+type Source = "canvas" | "google";
+const sourceNames = { canvas: "Canvas", google: "Google Calendar" };
+// Mirrors feed_list() and store_feed() in src-tauri/src/lib.rs
+type Feed = {
+  source: Source;
+  set: boolean;
+  file: boolean; // set from an uploaded .ics file rather than an address
+  status: { at: string; error?: string; tasks?: number; events?: number } | null;
+};
+// Mirrors events_today() in src-tauri/src/lib.rs
+type CalendarEvent = { title: string; start_at: string; end_at: string; all_day: boolean };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const focus = $<HTMLInputElement>("focus");
@@ -154,7 +169,12 @@ async function loadTasks() {
           ? "today"
           : // noon avoids daylight-saving edges
             new Date(`${t.due}T12:00:00`).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }));
-      const details = [t.course, due && `${late ? "was due" : "due"} ${due}`, t.estimate_min && duration(t.estimate_min)];
+      const details = [
+        t.course,
+        due && `${late ? "was due" : "due"} ${due}`,
+        t.estimate_min && duration(t.estimate_min),
+        t.removed && t.source && `removed from ${sourceNames[t.source]}`,
+      ];
       const remove = el("button", "×");
       remove.setAttribute("aria-label", `Delete task ${t.title}`);
       remove.onclick = () =>
@@ -178,6 +198,91 @@ $<HTMLFormElement>("add-task").onsubmit = (e) => {
     await loadTasks();
   });
 };
+
+// ---- imports: today's calendar events, and the feed addresses in Settings ----
+
+const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { timeStyle: "short" });
+
+async function loadEvents() {
+  const events = await invoke<CalendarEvent[]>("list_events");
+  $("schedule").hidden = !events.length;
+  $("events").replaceChildren(
+    ...events.map((e) => {
+      const li = el("li");
+      const when = e.all_day ? "All day" : e.end_at === e.start_at ? clock(e.start_at) : `${clock(e.start_at)} – ${clock(e.end_at)}`;
+      li.append(el("span", when, "when"), el("span", e.title));
+      return li;
+    }),
+  );
+}
+
+function feedStatus(f: Feed) {
+  if (!f.set) return "Not connected.";
+  if (!f.status) return "Not synced yet.";
+  if (f.status.error) return `Last sync failed at ${clock(f.status.at)}: ${f.status.error}.`;
+  const counts = [f.status.tasks && plural(f.status.tasks, "assignment"), plural(f.status.events ?? 0, "event")];
+  return `${f.file ? "Read from your file" : "Synced"} at ${clock(f.status.at)}: ${counts.filter(Boolean).join(", ")}.`;
+}
+
+async function loadFeeds() {
+  // a sync can finish while an address is being typed; redrawing would wipe it
+  if ($("feeds").querySelector<HTMLInputElement>("input[type=password]:focus, input[type=password]:not(:placeholder-shown)")) return;
+  const feeds = await invoke<Feed[]>("feeds");
+  $("feeds").replaceChildren(
+    ...feeds.map((f) => {
+      const name = sourceNames[f.source];
+      const form = el("form", "", "feed") as HTMLFormElement;
+      const input = el("input") as HTMLInputElement;
+      input.type = "password"; // the address is a secret, so it is never shown back
+      input.required = true;
+      input.autocomplete = "off";
+      input.placeholder = f.file
+        ? "Using your file. Paste an address to replace it"
+        : f.set
+          ? "Saved. Paste a new address to replace it"
+          : "Paste the feed address";
+      input.setAttribute("aria-label", `${name} feed address`);
+      const status = el("p", feedStatus(f), f.status?.error ? "late" : "muted");
+      const save = (command: string, args: object) => {
+        input.value = "";
+        input.blur();
+        status.textContent = "Syncing…";
+        run(() => invoke(command, { source: f.source, ...args }).finally(loadFeeds));
+      };
+      const set = (url: string) => save("set_feed", { url });
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        set(input.value);
+      };
+      // for a calendar with no feed address: an exported .ics file, read here and stored as text
+      const picker = el("input") as HTMLInputElement;
+      picker.type = "file";
+      picker.accept = ".ics,text/calendar";
+      picker.hidden = true;
+      picker.onchange = () => {
+        const file = picker.files?.[0];
+        if (file) run(async () => save("set_feed_file", { ics: await file.text() }));
+      };
+      const upload = el("button", "Upload .ics") as HTMLButtonElement;
+      upload.type = "button";
+      upload.setAttribute("aria-label", `Upload an .ics file for ${name}`);
+      upload.onclick = () => picker.click();
+      const row = el("div", "", "row");
+      row.append(input, el("button", "Save"), upload, picker);
+      if (f.set) {
+        const remove = el("button", "Disconnect") as HTMLButtonElement;
+        remove.type = "button";
+        remove.setAttribute("aria-label", `Disconnect ${name}`);
+        remove.onclick = () => set("");
+        row.append(remove);
+      }
+      form.append(el("label", name), row, status);
+      return form;
+    }),
+  );
+}
+
+$("sync").onclick = () => run(() => invoke("sync_now"));
 
 threshold.onchange = () => {
   if (threshold.reportValidity())
@@ -241,7 +346,10 @@ async function loadDay(streak: StreakState) {
 }
 
 run(loadPresets);
-run(loadTasks);
+// Rust sends "tasks" after every feed sync, whether it ran on the half hour or from Settings
+const loadImports = () => Promise.all([loadTasks(), loadEvents(), loadFeeds()]);
+run(loadImports);
+run(() => listen("tasks", () => run(loadImports)));
 run(() =>
   onTimer((s) => {
     $("idle").hidden = s.phase !== "idle";

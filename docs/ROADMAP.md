@@ -71,22 +71,30 @@ flowchart TD
 - Typed quick commands, such as "start 50 minutes" (P-4).
 - Reminders timed by due date against the estimate, held until the next break.
 
-**Uses:** new `task`, `task_source_link` and `calendar_event` tables in SQLite, the Canvas calendar feed (ICS), Google Calendar with read-only OAuth, the OS keychain for tokens (PR-4), a separate task-fetcher process that is the only one with network access (PR-6).
+**Uses:** new `task`, `task_source_link` and `calendar_event` tables in SQLite, the Canvas calendar feed (ICS), Google Calendar's secret iCal address (OAuth is deferred), the `icalendar`, `recurring-ical-events` and `certifi` packages, a separate task-fetcher process that is the only one with network access (PR-6). Feed addresses are in the `setting` table for now, not the OS keychain (PR-4 is not met; see `KNOWN_ISSUES.md`).
 
 **Tasks**
 - [x] Task tables and a migration
 - [x] Quick-add parser and its tests (`backend/tasks.py`)
 - [x] Task list in the panel: add, check off, delete
 - [x] Today and All views in the panel (a filter over one list; Today is not yet built at 7 am or stored in `planned_for`)
-- [ ] Task fetcher process, separate from the offline sidecar
-- [ ] Canvas ICS import with stable source IDs
-- [ ] Google Calendar read-only import; events shown as a timeline
-- [ ] Sync rules: keep done status, flag removed items, merge duplicates
+- [x] ICS feed parser and its tests (`backend/feeds.py`), checked against a real Canvas feed
+- [x] Feed storage with the sync rules for done status and removed items (`sync_feed` in `lib.rs`)
+- [x] Task fetcher process, separate from the offline sidecar (`backend/fetcher.py`)
+- [x] Canvas ICS import with stable source IDs; feed address set in Settings
+- [x] Calendar import by Google's secret iCal address; today's events listed in the panel
+- [x] Upload an exported .ics file where a calendar has no address
+- [ ] Try the Google import against a real calendar or export (only a made-up feed so far)
+- [ ] Google Calendar by read-only OAuth, so the calendar updates without uploading a file again
+- [ ] Feed addresses in the OS keychain (PR-4)
+- [ ] Merge a typed task with its imported copy
+- [ ] Check off a task when Canvas shows it submitted (needs a Canvas API token)
+- [ ] Let the user choose which courses and calendars to import
 - [ ] Tie a session to a task; show time spent against the estimate
 - [ ] Quick commands
 - [ ] Reminders at breaks and the morning brief
 
-**To decide:** which library parses ICS, and which handles OAuth.
+**Decided:** `icalendar` with `recurring-ical-events` parses ICS. **To decide:** which library handles OAuth, if it is needed.
 
 **Gate:** one week with no other to-do app opened.
 
