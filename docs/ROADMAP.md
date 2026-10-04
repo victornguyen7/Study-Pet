@@ -28,11 +28,12 @@ flowchart TD
 - Blocks of any length count toward the day (S-6).
 - Streak: a day counts at 25 minutes (adjustable), 2 freezes a month, milestones at 7, 30 and 100 days.
 
-**Uses:** Tauri 2 (Rust core), Vite with plain TypeScript, a Python sidecar over JSON lines, SQLite through `rusqlite`, the Tauri global-shortcut plugin.
+**Uses:** Tauri 2 (Rust core), Vite with plain TypeScript, a Python sidecar over JSON lines, SQLite through `rusqlite`, the Tauri global-shortcut plugin, `objc2-app-kit` on macOS for window behavior Tauri does not expose.
 
 **Tasks**
 - [x] Scaffold Tauri, Vite and the Python sidecar
 - [x] Pet window: transparent, drag, click to open the panel, `Alt+Shift+P` to hide
+- [x] Pet on every macOS Space; the panel opens on the current one
 - [x] Panel with three views
 - [x] Timer state machine and its tests (`backend/timer.py`)
 - [x] Presets and finished focus blocks stored in SQLite

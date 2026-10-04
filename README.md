@@ -2,8 +2,8 @@
 
 Tauri desktop pet. See `docs/spec.md`; Phase 1 (pet, timer, streak) is built and Phase 2 (daily list) is under way.
 
-- `src/pet`, `index.html`: transparent always-on-top pet window. Drag to move, click to open the panel, `Alt+Shift+P` to hide/show.
-- `src/panel`, `panel.html`: panel window with three views: Today (session controls, the task list with quick add, today's focus blocks), Wrap up (day summary, last 7 days) and Settings (presets, streak goal).
+- `src/pet`, `index.html`: transparent always-on-top pet window, shown on every macOS Space. Drag to move, click to open the panel, `Alt+Shift+P` to hide/show.
+- `src/panel`, `panel.html`: panel window with three views: Today (session controls, the task list with quick add, today's focus blocks), Wrap up (day summary, last 7 days) and Settings (presets, streak goal). On macOS it opens on the Space you are on.
 - `src-tauri/src/lib.rs`: Rust core: SQLite store (`pet.db` in the project root for dev builds, in the OS app data dir for release builds), commands, Python sidecar.
 - `backend/timer.py`: session timer state machine (focus, break, call back). Rust ticks it once a second, stores finished focus blocks, and broadcasts the state to both windows as a `timer` event.
 - `backend/streaks.py`: streak rules (daily threshold, 2 freezes a month, milestones). Rust feeds it study minutes per day from the `session` table.

@@ -427,6 +427,16 @@ fn delete_task(db: State<Db>, id: i64) -> Result<(), String> {
 
 // ---- Windows ----
 
+#[cfg(target_os = "macos")]
+fn move_to_active_space(window: &tauri::WebviewWindow) {
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+    if let Ok(ptr) = window.ns_window() {
+        let ns_window = unsafe { &*(ptr as *const NSWindow) };
+        let behavior = ns_window.collectionBehavior();
+        ns_window.setCollectionBehavior(behavior | NSWindowCollectionBehavior::MoveToActiveSpace);
+    }
+}
+
 #[tauri::command]
 fn toggle_panel(app: AppHandle) -> tauri::Result<()> {
     let panel = app.get_webview_window("panel").expect("panel window in tauri.conf.json");
@@ -492,6 +502,11 @@ pub fn run() {
                     })
                     .build(),
             )?;
+
+            #[cfg(target_os = "macos")]
+            if let Some(panel) = app.get_webview_window("panel") {
+                move_to_active_space(&panel);
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

@@ -8,6 +8,8 @@
 - Tasks section in the panel's Today view: add a task, check it off, delete it. Overdue tasks are marked.
 - Commands `add_task`, `list_tasks`, `set_task_done` and `delete_task`.
 - `.env` files are ignored by git.
+- The pet shows on every macOS Space (`visibleOnAllWorkspaces`), so it follows you between desktops.
+- The panel opens on the Space you are on instead of pulling you back to the one it was last on (`move_to_active_space`, macOS only). New macOS-only dependency: `objc2-app-kit`.
 
 **Not yet**
 - Separate Today and All views, imports from Canvas and the calendar, tying a session to a task, reminders.

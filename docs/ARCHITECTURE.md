@@ -89,6 +89,10 @@ The tick is the heartbeat. Python decides when a phase changes, Rust stores the 
 
 The panel sends the typed line to `add_task`. Rust asks SQLite for today's local date, passes the line and the date to `quick_add` in the sidecar, and inserts the fields that come back into `task`. The panel then calls `list_tasks` and redraws. Python parsed the line and Rust stored it; neither did the other's job.
 
+### The windows and macOS Spaces
+
+The pet is set in `tauri.conf.json` to show on every Space, so it follows the user between desktops. The panel is a normal window that lives on one Space at a time; at startup Rust sets its AppKit collection behavior to move to the active Space (`move_to_active_space` in `lib.rs`, macOS only), so a click on the pet opens the panel where the user is. This is the one place the core calls AppKit directly, through `objc2-app-kit`.
+
 ### Adding a feature in this shape
 
 1. **Rule** (a calculation or a state machine): write a function in `backend/`, add it to `METHODS` in `backend/main.py`, and give it a test in `backend/tests/`.

@@ -24,7 +24,7 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ### Rust core owns state, storage and windows
 - **Why:** one place holds the database, the one-second tick loop, both windows, the global shortcut and the event broadcast. Python never touches the database, and the UI never holds state.
 - **Gave up:** nothing so far.
-- **Revisit when:** `src-tauri/src/lib.rs` (one file, about 630 lines) gets hard to navigate.
+- **Revisit when:** `src-tauri/src/lib.rs` (one file, about 650 lines) gets hard to navigate.
 
 ### Python sidecar for logic
 - **Why:** the spec wants extraction and graph jobs (PyMuPDF, a local model) in a process with no network access (PR-6). Timer and streak rules live there too, so all logic is in one language and easy to unit test.
@@ -34,11 +34,11 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ## Phase 1 · Windows
 
 ### Two windows; closing the panel only hides it
-- **Why:** the pet stays tiny and transparent, the panel is a normal window. Hiding instead of closing lets a click on the pet reopen it (P-3). See `lib.rs:498`.
+- **Why:** the pet stays tiny and transparent, the panel is a normal window. Hiding instead of closing lets a click on the pet reopen it (P-3). See `lib.rs:515`.
 - **Gave up:** nothing.
 
 ### Hide shortcut hardcoded to Alt+Shift+P
-- **Why:** P-1 asks for one shortcut; one constant is the least code (`lib.rs:480`).
+- **Why:** P-1 asks for one shortcut; one constant is the least code (`lib.rs:490`).
 - **Gave up:** it is not configurable and may clash with another app.
 - **Revisit when:** it clashes, or PR-3's "look away" shortcut is added.
 
@@ -91,7 +91,7 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 - **Revisit when:** before Phase 4 stores captured text; switch rusqlite to `bundled-sqlcipher` with a key in the keychain (`lib.rs:16`).
 
 ### Dev database in the project root, release in the OS app data dir
-- **Why:** `pet.db` is easy to inspect during development (`lib.rs:447`). It is in `.gitignore`.
+- **Why:** `pet.db` is easy to inspect during development (`lib.rs:457`). It is in `.gitignore`.
 - **Gave up:** dev and release builds do not share data.
 
 ### Schema changes through `PRAGMA user_version`
@@ -170,3 +170,15 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ### The panel reloads the list instead of listening for an event
 - **Why:** only the panel shows tasks, so there is nothing to keep in sync.
 - **Revisit when:** the pet window shows tasks or reminders.
+
+## Phase 2 · Windows
+
+### The pet shows on every Space
+- **Why:** a pet that stays behind on one desktop stops being a companion as soon as the user swipes to another. `visibleOnAllWorkspaces` on the pet window in both `tauri.conf.json` and `tauri.daily.conf.json` is one line of config.
+- **Gave up:** the pet cannot be parked on one desktop; the hide shortcut is the only way to get it out of view.
+
+### The panel moves to the active Space, through AppKit directly
+- **Why:** the panel is hidden, not closed, so macOS remembered the Space it was last on and a click on the pet threw the user back there. Setting `NSWindowCollectionBehavior::MoveToActiveSpace` once at startup makes it appear where the user is (`move_to_active_space`, `lib.rs:431`). Tauri has no config key for this behavior, so it is set on the `NSWindow` itself.
+- **Rejected:** `visibleOnAllWorkspaces` on the panel too; a normal window that follows across every desktop is in the way.
+- **Gave up:** a macOS-only dependency (`objc2-app-kit`) and one `unsafe` pointer cast, both behind `cfg(target_os = "macos")`. Other platforms get no equivalent.
+- **Revisit when:** Tauri exposes the collection behavior, or the Windows build starts.
