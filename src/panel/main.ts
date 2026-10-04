@@ -118,10 +118,21 @@ $("stop").onclick = () => run(() => timer({ action: "stop" }));
 // ---- tasks: quick add, then a checkbox and a delete button per task ----
 
 const taskText = $<HTMLInputElement>("task-text");
+const filters = [...document.querySelectorAll<HTMLButtonElement>("#task-filter button")];
+let filter = "today";
+
+for (const button of filters)
+  button.onclick = () => {
+    filter = button.dataset.filter!;
+    for (const b of filters) b.setAttribute("aria-pressed", String(b === button));
+    run(loadTasks);
+  };
 
 async function loadTasks() {
-  const tasks = await invoke<Task[]>("list_tasks");
+  const all = await invoke<Task[]>("list_tasks");
   const today = new Date().toLocaleDateString("en-CA"); // "YYYY-MM-DD"
+  // Today: due today or overdue, undated, and the ones checked off today (list_tasks returns no older done ones)
+  const tasks = filter === "all" ? all : all.filter((t) => t.done || t.due === null || t.due <= today);
   $("tasks").replaceChildren(
     ...tasks.map((t) => {
       const li = el("li", "", t.done ? "done" : "");
@@ -155,7 +166,8 @@ async function loadTasks() {
       return li;
     }),
   );
-  if (!tasks.length) $("tasks").append(el("li", "No tasks yet. Type one above.", "empty"));
+  if (!tasks.length)
+    $("tasks").append(el("li", all.length ? "Nothing for today. The rest is under All." : "No tasks yet. Type one above.", "empty"));
 }
 
 $<HTMLFormElement>("add-task").onsubmit = (e) => {

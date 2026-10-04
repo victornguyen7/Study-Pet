@@ -158,10 +158,10 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 
 ## Phase 2 · Task list
 
-### One list for now, not Today and All
-- **Why:** it was the shortest path to a usable list. Open tasks sort by due date with undated ones last; tasks checked off today stay, struck through, until the day ends.
-- **Gave up:** every open task shows whatever its date, and `planned_for` is never set.
-- **Revisit when:** building the Today view.
+### Today and All are a filter in the panel over one list
+- **Why:** `list_tasks` already returns every open task plus the ones checked off today, sorted by due date with undated ones last. Today is that list minus tasks due later, filtered in `src/panel/main.ts`, so there is no second query and no stored state.
+- **Gave up:** an undated task counts as Today, since there is no other way to say "added for today"; `planned_for` is still never set, and nothing is built at 7 am. "Due soon compared with the estimate" is not part of Today yet.
+- **Revisit when:** imports arrive and undated or far-off tasks crowd Today; set `planned_for` and filter in SQL.
 
 ### Delete is one click, with no confirmation or undo
 - **Why:** the least code, and retyping a quick-add line is cheap.

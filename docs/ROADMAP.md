@@ -77,7 +77,7 @@ flowchart TD
 - [x] Task tables and a migration
 - [x] Quick-add parser and its tests (`backend/tasks.py`)
 - [x] Task list in the panel: add, check off, delete
-- [ ] Today and All views in the panel (there is one list of every open task so far)
+- [x] Today and All views in the panel (a filter over one list; Today is not yet built at 7 am or stored in `planned_for`)
 - [ ] Task fetcher process, separate from the offline sidecar
 - [ ] Canvas ICS import with stable source IDs
 - [ ] Google Calendar read-only import; events shown as a timeline

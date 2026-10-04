@@ -30,8 +30,8 @@
         "label": "panel",
         "url": "panel.html",
         "title": "Study Pet",
-        "width": 360,
-        "height": 520,
+        "width": 420,
+        "height": 620,
         "visible": false
       }
     ],

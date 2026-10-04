@@ -222,6 +222,33 @@ form {
 
 /* ---- tasks ---- */
 
+#task-head {
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+#task-head h2 {
+  margin: 0;
+}
+
+#task-filter {
+  gap: 4px;
+}
+
+#task-filter button {
+  padding: 2px 10px;
+  font-size: 13px;
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+}
+
+#task-filter button[aria-pressed="true"] {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
 #add-task {
   margin-bottom: 4px;
 }
