@@ -29,3 +29,7 @@ __pycache__
 
 # dev database
 pet.db*
+
+# secrets
+.env
+.env.*
