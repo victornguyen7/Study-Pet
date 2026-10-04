@@ -1,8 +1,8 @@
 # Study Pet
 
-A desktop pet that keeps a student focused. It runs locally on a laptop: a small always-on-top pet, a focus timer with breaks, and a forgiving streak. Later phases add a daily to-do list, focus nudges and an end-of-day knowledge graph.
+A desktop pet that keeps a student focused. It runs locally on a laptop: a small always-on-top pet, a focus timer with breaks, and a forgiving streak. A daily to-do list is being built now; later phases add focus nudges and an end-of-day knowledge graph.
 
-Currently in Phase 1 (pet, timer, streak), macOS first.
+Phase 1 (pet, timer, streak) is built. Phase 2 (daily list) is in progress: you can add, check off and delete your own tasks. macOS first.
 
 ## Setup
 
@@ -18,7 +18,7 @@ The Python backend uses only the standard library, so there is nothing to `pip i
 
     npm run build
     cd src-tauri && cargo test
-    backend/.venv/bin/python -m unittest backend.tests.test_timer backend.tests.test_streaks
+    backend/.venv/bin/python -m unittest backend.tests.test_timer backend.tests.test_streaks backend.tests.test_tasks
 
 Run the last command from the project root.
 
@@ -26,7 +26,7 @@ Run the last command from the project root.
 
 - `src/`: the UI, in plain TypeScript (the pet and the panel).
 - `src-tauri/`: the Rust core. It owns the windows, the database and the timer tick.
-- `backend/`: the Python logic for the timer and the streak.
+- `backend/`: the Python logic for the timer, the streak and task quick add.
 
 ## Docs
 

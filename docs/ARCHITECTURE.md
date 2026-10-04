@@ -1,12 +1,12 @@
 # Architecture
 
-This page has two halves: what is built today (Phase 1), and the full system the spec describes, in the order it gets built. Why each choice was made is in `DECISIONS.md`.
+This page has two halves: what is built today (Phase 1 and the start of Phase 2), and the full system the spec describes, in the order it gets built. Why each choice was made is in `DECISIONS.md`.
 
 ## The idea in one paragraph
 
 Study Pet is three layers. The **UI** (two small web pages) only draws what it is told. The **Rust core** owns everything that must be held or stored: the windows, the database, the clock tick. The **Python sidecar** holds the rules: given some input, it returns an answer and remembers nothing on disk. Every later phase adds parts to this same shape.
 
-## Today: Phase 1
+## Today: Phase 1 and the start of Phase 2
 
 ```mermaid
 flowchart LR
@@ -22,6 +22,7 @@ flowchart LR
     subgraph PY["Python sidecar · backend/"]
         TIMER["timer.py"]
         STREAK["streaks.py"]
+        TASKS["tasks.py"]
     end
     PET -->|invoke| CMD
     PANEL -->|invoke| CMD
@@ -31,20 +32,30 @@ flowchart LR
     TICK --> CMD
     CMD <-->|"JSON lines, stdin/stdout"| TIMER
     CMD <-->|"JSON lines, stdin/stdout"| STREAK
+    CMD <-->|"JSON lines, stdin/stdout"| TASKS
 ```
 
 | Layer | Where | Its job | It never |
 | --- | --- | --- | --- |
 | UI | `src/pet`, `src/panel` | Draw the state, send button presses | Keeps state of its own |
-| Rust core | `src-tauri/src/lib.rs` | Windows, database, tick, passing messages | Decides timer or streak rules |
-| Python sidecar | `backend/` | Timer and streak rules | Touches the database or the network |
+| Rust core | `src-tauri/src/lib.rs` | Windows, database, tick, passing messages | Decides timer, streak or parsing rules |
+| Python sidecar | `backend/` | Timer and streak rules, quick-add parsing | Touches the database or the network |
 
-**The database** has three tables: `preset` (saved focus and break lengths), `session` (finished focus blocks) and `setting` (the streak goal).
+**The database** has six tables.
+
+| Table | Holds | Used yet |
+| --- | --- | --- |
+| `preset` | Saved focus and break lengths | Yes |
+| `session` | Finished focus blocks, each with an optional `task_id` | Yes; `task_id` is not filled in yet |
+| `setting` | The streak goal | Yes |
+| `task` | The pet's own to-do list: title, course, due, estimate, status | Yes |
+| `task_source_link` | Which imported item a task came from; `(source, source_uid)` is unique so a re-import cannot duplicate | No, waits for the task fetcher |
+| `calendar_event` | Imported calendar events, kept apart from tasks | No, waits for the task fetcher |
 
 ### How the layers talk
 
-- **UI to Rust:** `invoke("command_name", args)`. The commands are `timer`, `streak`, `day`, `list_presets`, `add_preset`, `delete_preset`, `set_streak_threshold`, `toggle_panel` and `backend_call`.
-- **Rust to UI:** two events, `timer` and `streak`, sent to both windows at once. This is why the pet and the panel always agree.
+- **UI to Rust:** `invoke("command_name", args)`. The commands are `timer`, `streak`, `day`, `list_presets`, `add_preset`, `delete_preset`, `set_streak_threshold`, `add_task`, `list_tasks`, `set_task_done`, `delete_task`, `toggle_panel` and `backend_call`.
+- **Rust to UI:** two events, `timer` and `streak`, sent to both windows at once. This is why the pet and the panel always agree. Tasks have no event: only the panel shows them, so it reloads the list after each change.
 - **Rust to Python:** one line of JSON in, one line out: `{"method": "timer", "params": {...}}` returns `{"ok": ...}` or `{"error": ...}`.
 
 ### One example: a focus block, start to finish
@@ -73,6 +84,10 @@ sequenceDiagram
 ```
 
 The tick is the heartbeat. Python decides when a phase changes, Rust stores the result and tells the windows.
+
+### A second example: adding a task
+
+The panel sends the typed line to `add_task`. Rust asks SQLite for today's local date, passes the line and the date to `quick_add` in the sidecar, and inserts the fields that come back into `task`. The panel then calls `list_tasks` and redraws. Python parsed the line and Rust stored it; neither did the other's job.
 
 ### Adding a feature in this shape
 

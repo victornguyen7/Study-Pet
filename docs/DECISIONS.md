@@ -24,7 +24,7 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ### Rust core owns state, storage and windows
 - **Why:** one place holds the database, the one-second tick loop, both windows, the global shortcut and the event broadcast. Python never touches the database, and the UI never holds state.
 - **Gave up:** nothing so far.
-- **Revisit when:** `src-tauri/src/lib.rs` (one file, about 430 lines) gets hard to navigate.
+- **Revisit when:** `src-tauri/src/lib.rs` (one file, about 630 lines) gets hard to navigate.
 
 ### Python sidecar for logic
 - **Why:** the spec wants extraction and graph jobs (PyMuPDF, a local model) in a process with no network access (PR-6). Timer and streak rules live there too, so all logic is in one language and easy to unit test.
@@ -34,11 +34,11 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ## Phase 1 · Windows
 
 ### Two windows; closing the panel only hides it
-- **Why:** the pet stays tiny and transparent, the panel is a normal window. Hiding instead of closing lets a click on the pet reopen it (P-3). See `lib.rs:358`.
+- **Why:** the pet stays tiny and transparent, the panel is a normal window. Hiding instead of closing lets a click on the pet reopen it (P-3). See `lib.rs:498`.
 - **Gave up:** nothing.
 
 ### Hide shortcut hardcoded to Alt+Shift+P
-- **Why:** P-1 asks for one shortcut; one constant is the least code (`lib.rs:341`).
+- **Why:** P-1 asks for one shortcut; one constant is the least code (`lib.rs:480`).
 - **Gave up:** it is not configurable and may clash with another app.
 - **Revisit when:** it clashes, or PR-3's "look away" shortcut is added.
 
@@ -54,12 +54,12 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ## Phase 1 · Sidecar
 
 ### JSON lines over stdin/stdout, one process behind one lock
-- **Why:** the simplest protocol that works: one request line, one reply line, no ports and no network. The process starts on first use and is respawned after an error (`lib.rs:163-215`).
+- **Why:** the simplest protocol that works: one request line, one reply line, no ports and no network. The process starts on first use and is respawned after an error (`lib.rs:202-254`).
 - **Gave up:** calls are serialized, so a long job would stall the timer tick.
 - **Revisit when:** Phase 5 adds graph building; give long jobs their own process.
 
 ### Sidecar is started from the source tree
-- **Why:** fastest path for development: `backend/.venv/bin/python -m backend.main` (`lib.rs:172`).
+- **Why:** fastest path for development: `backend/.venv/bin/python -m backend.main` (`lib.rs:216`).
 - **Gave up:** a release build cannot find Python, so the app only runs through `npm run tauri dev`.
 - **Revisit when:** building a distributable; freeze `backend/` with PyInstaller and ship it as `bundle.externalBin`.
 
@@ -70,7 +70,7 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ## Phase 1 · Timer
 
 ### Wall-clock time, and a tick that catches up
-- **Why:** the laptop sleeps with the lid closed. `time.time()` plus plain `if`s in `Timer.tick` walk through every phase that was missed (`backend/main.py:28`, `backend/timer.py:48`).
+- **Why:** the laptop sleeps with the lid closed. `time.time()` plus plain `if`s in `Timer.tick` walk through every phase that was missed (`backend/main.py:29`, `backend/timer.py:48`).
 - **Gave up:** time asleep during a focus block counts as focus, up to the planned length.
 - **Revisit when:** Phase 3 can tell whether the user was actually there.
 
@@ -91,15 +91,15 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 - **Revisit when:** before Phase 4 stores captured text; switch rusqlite to `bundled-sqlcipher` with a key in the keychain (`lib.rs:16`).
 
 ### Dev database in the project root, release in the OS app data dir
-- **Why:** `pet.db` is easy to inspect during development (`lib.rs:310`). It is in `.gitignore`.
+- **Why:** `pet.db` is easy to inspect during development (`lib.rs:447`). It is in `.gitignore`.
 - **Gave up:** dev and release builds do not share data.
 
 ### Schema changes through `PRAGMA user_version`
-- **Why:** a migration is one `if version < N` block, with no migration library (`lib.rs:36`).
+- **Why:** a migration is one `if version < N` block, with no migration library (`lib.rs:70`).
 - **Gave up:** no down-migrations.
 
 ### Times stored as UTC text, days grouped by local time
-- **Why:** UTC is unambiguous in storage; the streak is about the user's own day (`lib.rs:105-131`).
+- **Why:** UTC is unambiguous in storage; the streak is about the user's own day (`lib.rs:153-182`).
 - **Gave up:** a block that crosses midnight counts wholly toward the day it started.
 - **Revisit when:** late-night sessions make a day's total look wrong.
 
@@ -113,3 +113,60 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ### Freeze rules
 - **Why:** the spec says two freezes a month. The code spends one on the day of the miss, only when a streak exists; a frozen day keeps the streak but adds nothing; today never breaks a streak because it is not over.
 - **Gave up:** nothing. These details are not in the spec, so this entry is their only record.
+
+## Phase 2 · Task storage
+
+### Two due columns on `task`: `due_at` and `due_date`
+- **Why:** an assignment due at 11:59 pm needs a UTC time; an all-day item has only a date, and forcing a time on it would shift it across time zones. A check stops both being set at once.
+- **Gave up:** every query that sorts by due has to combine the two (`coalesce(due_date, date(due_at, 'localtime'))`).
+
+### Calendar events get their own table
+- **Why:** events are not tasks. They have no done state and never merge with anything, so putting them in `task` would mean columns that are always empty and filters on every query.
+- **Gave up:** the Today view has to read two tables.
+
+### `(source, source_uid)` is UNIQUE in the database
+- **Why:** the spec says a re-sync must never bring back a checked task. With the constraint, a duplicate import fails in SQLite even if the import code has a bug.
+- **Gave up:** nothing.
+
+### Deleting a task keeps its focus blocks
+- **Why:** `session.task_id` is `ON DELETE SET NULL`, so study time and the streak survive; the task's source links are deleted with it.
+- **Gave up:** a deleted task's blocks no longer say what they were for.
+
+### Status is `todo` or `done` only
+- **Why:** nothing else is needed yet. "Removed at the source" is recorded on the source link, not as a status.
+- **Revisit when:** the user wants to drop a task without deleting it.
+
+## Phase 2 · Quick add
+
+### Due date and estimate are read off the end of the line only
+- **Why:** the same words inside a title stay untouched ("read Friday Night Lights sat"). The two can come in either order.
+- **Gave up:** "2h HW3 fri" leaves "2h" in the title.
+
+### A weekday name means the coming one, and "next" is ignored
+- **Why:** a weekday that is today means today, so a task due in hours does not slip a week. Words that only lead into the date ("due", "on", "by", "next", "this", ...) are dropped with it.
+- **Gave up:** "next Friday" cannot mean the Friday after this one, and a title that really ends in one of those words loses it ("check in fri" becomes "check").
+- **Revisit when:** a task lands on the wrong week in real use.
+
+### The course is guessed from its shape
+- **Why:** letters then a number at the start of the line ("STAT 310", "cs61a") needs no list of courses.
+- **Gave up:** "read 100 pages" becomes course READ 100, and "Stat HW 5" gets no course.
+- **Revisit when:** the Canvas import supplies the real course names; match against those.
+
+### Quick add gives a date, never a time
+- **Why:** typed lines like "Fri" carry no time. Only `due_date` is filled; `due_at` waits for imports.
+- **Revisit when:** typed times ("Fri 5pm") are wanted.
+
+## Phase 2 · Task list
+
+### One list for now, not Today and All
+- **Why:** it was the shortest path to a usable list. Open tasks sort by due date with undated ones last; tasks checked off today stay, struck through, until the day ends.
+- **Gave up:** every open task shows whatever its date, and `planned_for` is never set.
+- **Revisit when:** building the Today view.
+
+### Delete is one click, with no confirmation or undo
+- **Why:** the least code, and retyping a quick-add line is cheap.
+- **Revisit when:** imported tasks appear; deleting one of those should probably hide it rather than remove it, or the next sync brings it back.
+
+### The panel reloads the list instead of listening for an event
+- **Why:** only the panel shows tasks, so there is nothing to keep in sync.
+- **Revisit when:** the pet window shows tasks or reminders.

@@ -14,7 +14,7 @@ flowchart TD
     style SP stroke-dasharray: 5 5
 ```
 
-## Phase 1 · Pet core (in progress)
+## Phase 1 · Pet core (done)
 
 **Builds:** the pet window, the panel, the session timer and the streak.
 
@@ -58,7 +58,7 @@ flowchart TD
 
 **Gate:** go / no-go for Phase 5.
 
-## Phase 2 · Daily list
+## Phase 2 · Daily list (in progress)
 
 **Builds:** the pet's own to-do list, the Today view, and the first two read-only feeds.
 
@@ -70,12 +70,13 @@ flowchart TD
 - Typed quick commands, such as "start 50 minutes" (P-4).
 - Reminders timed by due date against the estimate, held until the next break.
 
-**Uses:** new `task` and `task_source_link` tables in SQLite, the Canvas calendar feed (ICS), Google Calendar with read-only OAuth, the OS keychain for tokens (PR-4), a separate task-fetcher process that is the only one with network access (PR-6).
+**Uses:** new `task`, `task_source_link` and `calendar_event` tables in SQLite, the Canvas calendar feed (ICS), Google Calendar with read-only OAuth, the OS keychain for tokens (PR-4), a separate task-fetcher process that is the only one with network access (PR-6).
 
 **Tasks**
-- [ ] Task tables and a migration
-- [ ] Quick-add parser and its tests
-- [ ] Today and All views in the panel
+- [x] Task tables and a migration
+- [x] Quick-add parser and its tests (`backend/tasks.py`)
+- [x] Task list in the panel: add, check off, delete
+- [ ] Today and All views in the panel (there is one list of every open task so far)
 - [ ] Task fetcher process, separate from the offline sidecar
 - [ ] Canvas ICS import with stable source IDs
 - [ ] Google Calendar read-only import; events shown as a timeline

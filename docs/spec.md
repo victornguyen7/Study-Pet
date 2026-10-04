@@ -293,7 +293,7 @@ The privacy gate sits at the start of the capture path, so a Private window neve
 
 ## Data model
 
-Twelve record types cover the whole product, all stored in one encrypted local database.
+Thirteen record types cover the whole product, all stored in one encrypted local database.
 
 | Record | Key fields | Notes |
 | --- | --- | --- |
@@ -305,8 +305,9 @@ Twelve record types cover the whole product, all stored in one encrypted local d
 | Concept | name, aliases, first seen, embedding | A graph node |
 | Concept link | two concepts, relation, sources | A graph edge |
 | Concept mention | concept, source, time, task | Ties a node to where it was learned |
-| Task | title, course, due, estimate, status, done time | Owned by the pet |
+| Task | title, course, due time or due date, estimate, status, done time, planned day, last reminded | Owned by the pet |
 | Task source link | task, source app, source item ID, last sync, removed flag | Drives dedupe and sync |
+| Calendar event | source, source item ID, title, start, end, all-day flag | Not a task: no done state, never merged |
 | App rule | app or domain, tier, default mode, background-audio flag, set by | Privacy and mode rules |
 | Day summary | date, minutes per mode, streak counted, summary text, timelapse | One per wrap-up |
 

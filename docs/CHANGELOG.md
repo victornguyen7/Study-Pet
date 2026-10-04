@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 · Phase 2, in progress
+
+**Added**
+- Tables for the daily list: `task`, `task_source_link` and `calendar_event`, plus a nullable `task_id` on `session` (schema version 2).
+- Quick add: a typed line such as "STAT 310 HW3 Fri 2h" becomes a task with a course, due date and estimate (`backend/tasks.py`, with tests).
+- Tasks section in the panel's Today view: add a task, check it off, delete it. Overdue tasks are marked.
+- Commands `add_task`, `list_tasks`, `set_task_done` and `delete_task`.
+- `.env` files are ignored by git.
+
+**Not yet**
+- Separate Today and All views, imports from Canvas and the calendar, tying a session to a task, reminders.
+
 ## 0.1.0 · Phase 1, unreleased
 
 **Added**
