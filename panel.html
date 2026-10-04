@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Study Pet</title>
+    <link rel="stylesheet" href="/src/panel/panel.css" />
+    <script type="module" src="/src/panel/main.ts"></script>
+  </head>
+  <body>
+    <nav aria-label="Panel views">
+      <button data-view="today" aria-current="page">Today</button>
+      <button data-view="wrapup">Wrap up</button>
+      <button data-view="settings">Settings</button>
+    </nav>
+
+    <main id="today">
+      <!-- the tank: its water level rises through a focus block and drains through a break -->
+      <section class="tank" aria-label="Session">
+        <div class="level"></div>
+
+        <div id="idle">
+          <h1>Ready when you are</h1>
+          <div id="presets" class="row"></div>
+          <form id="start">
+            <div class="row">
+              <label>Focus <input id="focus" type="number" min="1" value="25" required /> min</label>
+              <label>Break <input id="break" type="number" min="1" value="5" required /> min</label>
+            </div>
+            <div class="row">
+              <button class="primary">Start focus</button>
+              <button type="button" id="save">Save as preset</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="running" hidden>
+          <h1 id="phase"></h1>
+          <p id="clock" role="timer"></p>
+          <div class="row">
+            <button id="resume" class="primary">I'm back</button>
+            <button id="skip">Skip break</button>
+            <button id="stop">Stop session</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Today's focus blocks</h2>
+        <ol id="blocks" class="rows"></ol>
+        <p id="streak-line" class="muted"></p>
+      </section>
+    </main>
+
+    <main id="wrapup" hidden>
+      <h1 id="wrap-total"></h1>
+      <p id="wrap-streak"></p>
+      <section>
+        <h2>Last 7 days</h2>
+        <ol id="week"></ol>
+        <p class="muted">Filled days reached your daily goal.</p>
+      </section>
+    </main>
+
+    <main id="settings" hidden>
+      <section>
+        <h2>Presets</h2>
+        <ul id="preset-list" class="rows"></ul>
+        <p class="muted">Add one from Today with “Save as preset”.</p>
+      </section>
+      <section>
+        <h2>Streak</h2>
+        <label>A day counts at <input id="threshold" type="number" min="1" max="1440" required /> min of focus</label>
+      </section>
+      <section>
+        <h2>Pet</h2>
+        <p>Press <kbd>Option</kbd> <kbd>Shift</kbd> <kbd>P</kbd> to hide or show the pet. Drag it to move it.</p>
+      </section>
+    </main>
+
+    <p id="error" role="alert"></p>
+  </body>
+</html>
