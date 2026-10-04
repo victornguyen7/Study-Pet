@@ -220,6 +220,64 @@ form {
   border: 0;
 }
 
+/* ---- tasks ---- */
+
+#add-task {
+  margin-bottom: 4px;
+}
+
+#task-text {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+#tasks label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+}
+
+#tasks input {
+  width: auto;
+  accent-color: var(--pond);
+}
+
+#tasks .muted,
+#tasks .late {
+  margin-top: 0;
+  font-size: 13px;
+  text-align: right;
+}
+
+#tasks .late {
+  color: #c2452d;
+}
+
+/* the details sit on the right; the delete button follows them */
+#tasks li > span {
+  margin-left: auto;
+}
+
+#tasks li > button {
+  margin-left: 0;
+  padding: 0 8px;
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+}
+
+#tasks li > button:hover {
+  color: #c2452d;
+}
+
+#tasks .done label {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 /* ---- wrap up ---- */
 
 #wrap-streak {

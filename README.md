@@ -19,4 +19,4 @@ Tauri desktop pet. See `docs/spec.md`; this is the Phase 1 skeleton.
 
     npm run build                   # typecheck + bundle the UI
     cd src-tauri && cargo test      # DB schema + Rust <-> Python round trip
-    backend/.venv/bin/python -m unittest backend.tests.test_timer backend.tests.test_streaks   # timer and streak logic (from the project root)
+    backend/.venv/bin/python -m unittest backend.tests.test_timer backend.tests.test_streaks backend.tests.test_tasks   # timer, streak and task logic (from the project root)

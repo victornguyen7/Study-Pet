@@ -31,11 +31,50 @@ fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             planned_min INTEGER NOT NULL,
             break_min INTEGER NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS setting (key TEXT PRIMARY KEY, value);",
+        CREATE TABLE IF NOT EXISTS setting (key TEXT PRIMARY KEY, value);
+        CREATE TABLE IF NOT EXISTS task (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            course TEXT,
+            due_at TEXT,   -- UTC timestamp, for items due at a time
+            due_date TEXT, -- YYYY-MM-DD, for all-day items
+            estimate_min INTEGER,
+            status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'done')),
+            done_at TEXT,
+            planned_for TEXT, -- YYYY-MM-DD, the day it is on the Today list
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+            reminded_at TEXT,
+            CHECK (due_at IS NULL OR due_date IS NULL)
+        );
+        CREATE TABLE IF NOT EXISTS task_source_link (
+            id INTEGER PRIMARY KEY,
+            task_id INTEGER NOT NULL REFERENCES task(id) ON DELETE CASCADE,
+            source TEXT NOT NULL, -- such as 'canvas'
+            source_uid TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            removed_at TEXT,
+            UNIQUE (source, source_uid)
+        );
+        CREATE TABLE IF NOT EXISTS calendar_event (
+            id INTEGER PRIMARY KEY,
+            source TEXT NOT NULL,
+            uid TEXT NOT NULL,
+            title TEXT NOT NULL,
+            start_at TEXT NOT NULL, -- UTC timestamp, or YYYY-MM-DD when all_day
+            end_at TEXT NOT NULL,
+            all_day INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (source, uid)
+        );",
     )?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if version < 1 {
         conn.execute_batch("ALTER TABLE session ADD COLUMN label TEXT; PRAGMA user_version = 1;")?;
+    }
+    if version < 2 {
+        conn.execute_batch(
+            "ALTER TABLE session ADD COLUMN task_id INTEGER REFERENCES task(id) ON DELETE SET NULL;
+             PRAGMA user_version = 2;",
+        )?;
     }
     Ok(())
 }
@@ -286,6 +325,106 @@ fn set_streak_threshold(app: AppHandle, minutes: f64) -> Result<Value, String> {
     streak_state(&app)
 }
 
+// ---- Tasks: quick-add parsing in backend/tasks.py ----
+
+/// A typed line after backend/tasks.py has parsed it.
+#[derive(Serialize, Deserialize)]
+struct NewTask {
+    title: String,
+    course: Option<String>,
+    due_date: Option<String>,
+    estimate_min: Option<i64>,
+}
+
+fn insert_task(conn: &Connection, t: &NewTask) -> rusqlite::Result<i64> {
+    conn.execute(
+        "INSERT INTO task (title, course, due_date, estimate_min) VALUES (?1, ?2, ?3, ?4)",
+        (&t.title, &t.course, &t.due_date, t.estimate_min),
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// `text` is one quick-add line, such as "STAT 310 HW3 Fri 2h". Returns the new task with its id.
+#[tauri::command(async)]
+fn add_task(db: State<Db>, backend: State<Backend>, text: String) -> Result<Value, String> {
+    let today: String = db
+        .0
+        .lock()
+        .unwrap()
+        .query_row("SELECT date('now', 'localtime')", [], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    let parsed = sidecar_call(&backend, "quick_add", Some(json!({ "text": text, "today": today })))?;
+    let task: NewTask = serde_json::from_value(parsed).map_err(|e| e.to_string())?;
+    let id = insert_task(&db.0.lock().unwrap(), &task).map_err(|e| e.to_string())?;
+    let mut task = json!(task);
+    task["id"] = json!(id);
+    Ok(task)
+}
+
+/// A row of the panel's task list. `due` is a local "YYYY-MM-DD", whichever due column is set.
+#[derive(Serialize)]
+struct Task {
+    id: i64,
+    title: String,
+    course: Option<String>,
+    due: Option<String>,
+    estimate_min: Option<i64>,
+    done: bool,
+}
+
+/// Open tasks by due date (undated last), then the ones checked off today.
+fn tasks(conn: &Connection) -> rusqlite::Result<Vec<Task>> {
+    conn.prepare(
+        "SELECT id, title, course, coalesce(due_date, date(due_at, 'localtime')) AS due, estimate_min, status = 'done'
+         FROM task
+         WHERE status = 'todo' OR date(done_at, 'localtime') = date('now', 'localtime')
+         ORDER BY status = 'done', due IS NULL, due, id",
+    )?
+    .query_map([], |r| {
+        Ok(Task {
+            id: r.get(0)?,
+            title: r.get(1)?,
+            course: r.get(2)?,
+            due: r.get(3)?,
+            estimate_min: r.get(4)?,
+            done: r.get(5)?,
+        })
+    })?
+    .collect()
+}
+
+fn set_done(conn: &Connection, id: i64, done: bool) -> rusqlite::Result<usize> {
+    conn.execute(
+        "UPDATE task SET status = iif(?2, 'done', 'todo'),
+                         done_at = iif(?2, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), NULL)
+         WHERE id = ?1",
+        (id, done),
+    )
+}
+
+#[tauri::command]
+fn list_tasks(db: State<Db>) -> Result<Vec<Task>, String> {
+    tasks(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_task_done(db: State<Db>, id: i64, done: bool) -> Result<(), String> {
+    match set_done(&db.0.lock().unwrap(), id, done) {
+        Ok(0) => Err(format!("no task with id {id}")),
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn delete_task(db: State<Db>, id: i64) -> Result<(), String> {
+    db.0.lock()
+        .unwrap()
+        .execute("DELETE FROM task WHERE id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // ---- Windows ----
 
 #[tauri::command]
@@ -373,6 +512,10 @@ pub fn run() {
             timer,
             streak,
             set_streak_threshold,
+            add_task,
+            list_tasks,
+            set_task_done,
+            delete_task,
             toggle_panel
         ])
         .run(tauri::generate_context!())
@@ -395,6 +538,47 @@ mod tests {
         save_session(&conn, &s).unwrap();
         let ended: String = conn.query_row("SELECT ended_at FROM session", [], |r| r.get(0)).unwrap();
         assert_eq!(ended, "1970-01-01T00:25:00+00:00");
+    }
+
+    #[test]
+    fn task_tables_block_duplicates_and_follow_deletes() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        init_db(&conn).unwrap();
+        conn.execute("INSERT INTO task (title) VALUES ('HW3')", []).unwrap();
+        let link = "INSERT INTO task_source_link (task_id, source, source_uid, last_seen_at) VALUES (1, 'canvas', 'a1', '2026-01-01T00:00:00Z')";
+        conn.execute(link, []).unwrap();
+        assert!(conn.execute(link, []).is_err());
+        assert!(conn.execute("UPDATE task SET status = 'nope'", []).is_err());
+
+        conn.execute("INSERT INTO session (started_at, planned_min, break_min, task_id) VALUES ('2026-01-01T00:00:00Z', 25, 5, 1)", []).unwrap();
+        conn.execute("DELETE FROM task", []).unwrap();
+        let links: i64 = conn.query_row("SELECT count(*) FROM task_source_link", [], |r| r.get(0)).unwrap();
+        let task_id: Option<i64> = conn.query_row("SELECT task_id FROM session", [], |r| r.get(0)).unwrap();
+        assert_eq!((links, task_id), (0, None));
+    }
+
+    #[test]
+    fn task_list_orders_by_due_and_keeps_todays_done() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        let add = |title: &str, due: Option<&str>| {
+            let t = NewTask { title: title.into(), course: None, due_date: due.map(Into::into), estimate_min: None };
+            insert_task(&conn, &t).unwrap()
+        };
+        let (undated, late, soon) = (add("undated", None), add("late", Some("2026-12-01")), add("soon", Some("2026-11-01")));
+        let order = || tasks(&conn).unwrap().iter().map(|t| (t.id, t.done)).collect::<Vec<_>>();
+        assert_eq!(order(), [(soon, false), (late, false), (undated, false)]);
+
+        assert_eq!(set_done(&conn, soon, true).unwrap(), 1);
+        assert_eq!(order(), [(late, false), (undated, false), (soon, true)]);
+        // done on an earlier day: off the list
+        conn.execute("UPDATE task SET done_at = '2020-01-01T00:00:00Z' WHERE id = ?1", [soon]).unwrap();
+        assert_eq!(order(), [(late, false), (undated, false)]);
+
+        set_done(&conn, soon, false).unwrap();
+        assert_eq!(order()[0], (soon, false));
+        assert_eq!(set_done(&conn, 99, true).unwrap(), 0);
     }
 
     #[test]
@@ -424,6 +608,19 @@ mod tests {
         let mut sidecar = spawn_sidecar().unwrap();
         assert_eq!(call(&mut sidecar, "ping", None).unwrap()["pong"], true);
         assert!(call(&mut sidecar, "nope", None).is_err());
+
+        let line = json!({ "text": "STAT 310 HW3 2026-10-23 2h", "today": "2026-10-20" });
+        let task: NewTask = serde_json::from_value(call(&mut sidecar, "quick_add", Some(line)).unwrap()).unwrap();
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        assert_eq!(insert_task(&conn, &task).unwrap(), 1);
+        let row: (String, String, String, i64, String) = conn
+            .query_row("SELECT title, course, due_date, estimate_min, status FROM task", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            })
+            .unwrap();
+        assert_eq!(row, ("HW3".into(), "STAT 310".into(), "2026-10-23".into(), 120, "todo".into()));
+        assert!(call(&mut sidecar, "quick_add", Some(json!({ "text": "fri", "today": "2026-10-20" }))).is_err());
 
         let start = json!({ "action": "start_focus", "focus_min": 25, "break_min": 5 });
         assert_eq!(call(&mut sidecar, "timer", Some(start)).unwrap()["phase"], "focus");

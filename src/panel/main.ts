@@ -11,6 +11,16 @@ type Day = {
   threshold: number;
 };
 
+// Mirrors Task in src-tauri/src/lib.rs
+type Task = {
+  id: number;
+  title: string;
+  course: string | null;
+  due: string | null; // "YYYY-MM-DD"
+  estimate_min: number | null;
+  done: boolean;
+};
+
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const focus = $<HTMLInputElement>("focus");
 const brk = $<HTMLInputElement>("break");
@@ -105,6 +115,58 @@ $("resume").onclick = () => run(() => timer({ action: "resume" }));
 $("skip").onclick = () => run(() => timer({ action: "skip_break" }));
 $("stop").onclick = () => run(() => timer({ action: "stop" }));
 
+// ---- tasks: quick add, then a checkbox and a delete button per task ----
+
+const taskText = $<HTMLInputElement>("task-text");
+
+async function loadTasks() {
+  const tasks = await invoke<Task[]>("list_tasks");
+  const today = new Date().toLocaleDateString("en-CA"); // "YYYY-MM-DD"
+  $("tasks").replaceChildren(
+    ...tasks.map((t) => {
+      const li = el("li", "", t.done ? "done" : "");
+      const label = el("label");
+      const box = el("input") as HTMLInputElement;
+      box.type = "checkbox";
+      box.checked = t.done;
+      box.onchange = () =>
+        run(async () => {
+          await invoke("set_task_done", { id: t.id, done: box.checked });
+          await loadTasks();
+        });
+      label.append(box, el("span", t.title));
+
+      const late = !t.done && t.due !== null && t.due < today;
+      const due =
+        t.due &&
+        (t.due === today
+          ? "today"
+          : // noon avoids daylight-saving edges
+            new Date(`${t.due}T12:00:00`).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }));
+      const details = [t.course, due && `${late ? "was due" : "due"} ${due}`, t.estimate_min && duration(t.estimate_min)];
+      const remove = el("button", "×");
+      remove.setAttribute("aria-label", `Delete task ${t.title}`);
+      remove.onclick = () =>
+        run(async () => {
+          await invoke("delete_task", { id: t.id });
+          await loadTasks();
+        });
+      li.append(label, el("span", details.filter(Boolean).join(" · "), late ? "late" : "muted"), remove);
+      return li;
+    }),
+  );
+  if (!tasks.length) $("tasks").append(el("li", "No tasks yet. Type one above.", "empty"));
+}
+
+$<HTMLFormElement>("add-task").onsubmit = (e) => {
+  e.preventDefault();
+  run(async () => {
+    await invoke("add_task", { text: taskText.value });
+    taskText.value = "";
+    await loadTasks();
+  });
+};
+
 threshold.onchange = () => {
   if (threshold.reportValidity())
     run(() => invoke("set_streak_threshold", { minutes: threshold.valueAsNumber }));
@@ -167,6 +229,7 @@ async function loadDay(streak: StreakState) {
 }
 
 run(loadPresets);
+run(loadTasks);
 run(() =>
   onTimer((s) => {
     $("idle").hidden = s.phase !== "idle";

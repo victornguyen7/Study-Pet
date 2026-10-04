@@ -10,6 +10,7 @@ import sys
 import time
 
 from backend.streaks import streak
+from backend.tasks import parse_quick_add
 from backend.timer import Timer
 
 _timer = Timer()
@@ -30,7 +31,12 @@ def timer(params):
     return _timer.state(now) | {"sessions": _timer.drain_finished()}
 
 
-METHODS = {"ping": ping, "timer": timer, "streak": lambda params: streak(**params)}
+METHODS = {
+    "ping": ping,
+    "timer": timer,
+    "streak": lambda params: streak(**params),
+    "quick_add": lambda params: parse_quick_add(**params),
+}
 
 for line in sys.stdin:
     try:
