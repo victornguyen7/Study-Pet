@@ -23,7 +23,7 @@ Separately, a dummy value was written to the macOS Keychain through the `securit
 | --- | --- |
 | Who signs in | Only the developer, on this laptop, for now |
 | Cloud project status | Stays in "Testing" (decided 2026-10-05), so the sign-in is repeated every 7 days |
-| Everyday app | Does not get this until every Phase 2 step is finished; the dev app only for now |
+| Everyday app | Reinstalled with this on 2026-10-05, with its own copy of `google_client.json`. It still uses the uploaded file until someone signs in there |
 | Replace the address and file routes? | No. An account is a third way to connect the Google source. A source holds one of address, file or account at a time |
 | Which calendars | Primary only |
 | Where the refresh token lives | macOS Keychain, through the built-in `security` tool |
