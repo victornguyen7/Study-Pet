@@ -22,7 +22,13 @@ type Task = {
   done: boolean;
   source: Source | null; // where it was imported from
   removed: boolean; // imported, and no longer in its source's feed
+  spent_min: number; // focus time in sessions tied to it
+  same_as: { id: number; title: string; source: Source } | null; // a typed task's likely imported copy
+  soon: boolean; // the time left until it is due is under twice the work left
+  ask_submitted: boolean; // imported and past due: the feed can't say whether it was handed in
 };
+// Mirrors courses() in src-tauri/src/lib.rs
+type Course = { course: string; open: number; hidden: boolean };
 
 type Source = "canvas" | "google";
 const sourceNames = { canvas: "Canvas", google: "Google Calendar" };
@@ -114,11 +120,19 @@ async function loadPresets() {
 
 // ---- session controls ----
 
+// S-2: a session can be for one task. `task` comes from a task's own start button, or from the "Working on" list.
+const taskPick = $<HTMLSelectElement>("task-pick");
+let openTasks: Task[] = [];
+
+function startFocus(task?: Task) {
+  if (!form.reportValidity()) return;
+  const tied = task && { label: task.title, task_id: task.id };
+  run(() => timer({ action: "start_focus", focus_min: focus.valueAsNumber, break_min: brk.valueAsNumber, ...tied }));
+}
+
 form.onsubmit = (e) => {
   e.preventDefault();
-  run(() =>
-    timer({ action: "start_focus", focus_min: focus.valueAsNumber, break_min: brk.valueAsNumber }),
-  );
+  startFocus(openTasks.find((t) => String(t.id) === taskPick.value));
 };
 $("save").onclick = () => {
   if (!form.reportValidity()) return;
@@ -147,6 +161,14 @@ for (const button of filters)
 async function loadTasks() {
   const all = await invoke<Task[]>("list_tasks");
   const today = new Date().toLocaleDateString("en-CA"); // "YYYY-MM-DD"
+  openTasks = all.filter((t) => !t.done);
+  const picked = taskPick.value;
+  taskPick.replaceChildren(
+    new Option("No task", ""),
+    ...openTasks.map((t) => new Option(t.course ? `${t.title} (${t.course})` : t.title, String(t.id))),
+  );
+  taskPick.value = openTasks.some((t) => String(t.id) === picked) ? picked : "";
+  showFinished();
   // Today: due today or overdue, undated, and the ones checked off today (list_tasks returns no older done ones)
   const tasks = filter === "all" ? all : all.filter((t) => t.done || t.due === null || t.due <= today);
   $("tasks").replaceChildren(
@@ -173,9 +195,44 @@ async function loadTasks() {
       const details = [
         t.course,
         due && `${late ? "was due" : "due"} ${due}`,
-        t.estimate_min && duration(t.estimate_min),
+        t.estimate_min
+          ? t.spent_min >= 1
+            ? `${duration(t.spent_min)} of ${duration(t.estimate_min)}`
+            : duration(t.estimate_min)
+          : t.spent_min >= 1 && `${duration(t.spent_min)} spent`,
         t.removed && t.source && `removed from ${sourceNames[t.source]}`,
       ];
+      const extras: HTMLElement[] = [];
+      if (t.soon) extras.push(el("span", "start soon", "soon"));
+      if (t.ask_submitted) {
+        // stands in for Canvas submission status, which the feed does not carry
+        const yes = el("button", "Did you submit it? Yes", "merge");
+        yes.setAttribute("aria-label", `Yes, ${t.title} was submitted: check it off`);
+        yes.onclick = () =>
+          run(async () => {
+            await invoke("set_task_done", { id: t.id, done: true });
+            await loadTasks();
+          });
+        extras.push(yes);
+      }
+      const same = t.same_as;
+      if (same) {
+        // only a suggestion: the two become one task when the user says so
+        const merge = el("button", `Same as “${same.title}” from ${sourceNames[same.source]}? Merge`, "merge");
+        merge.onclick = () =>
+          run(async () => {
+            await invoke("merge_task", { typed: t.id, imported: same.id });
+            await loadTasks();
+          });
+        extras.push(merge);
+      }
+      if (!t.done) {
+        const start = el("button", "▶", "start");
+        start.title = "Start a focus block for this task";
+        start.setAttribute("aria-label", `Start a focus block for ${t.title}`);
+        start.onclick = () => startFocus(t);
+        extras.push(start);
+      }
       const remove = el("button", "×");
       remove.setAttribute("aria-label", `Delete task ${t.title}`);
       remove.onclick = () =>
@@ -183,7 +240,7 @@ async function loadTasks() {
           await invoke("delete_task", { id: t.id });
           await loadTasks();
         });
-      li.append(label, el("span", details.filter(Boolean).join(" · "), late ? "late" : "muted"), remove);
+      li.append(label, el("span", details.filter(Boolean).join(" · "), late ? "late" : "muted"), ...extras, remove);
       return li;
     }),
   );
@@ -297,6 +354,47 @@ async function loadFeeds() {
 
 $("sync").onclick = () => run(() => invoke("sync_now"));
 
+// ---- courses: which imported courses show on the task list ----
+
+async function loadCourses() {
+  const courses = await invoke<Course[]>("list_courses");
+  $("courses").hidden = !courses.length;
+  $("course-list").replaceChildren(
+    ...courses.map((c) => {
+      const li = el("li");
+      const label = el("label");
+      const box = el("input") as HTMLInputElement;
+      box.type = "checkbox";
+      box.checked = !c.hidden;
+      box.onchange = () =>
+        run(async () => {
+          await invoke("set_course", { course: c.course, shown: box.checked });
+          await Promise.all([loadTasks(), loadCourses()]);
+        });
+      label.append(box, el("span", c.course));
+      li.append(label, el("span", plural(c.open, "open assignment"), "muted"));
+      return li;
+    }),
+  );
+}
+
+// ---- "Finished it?": asked in the break after a focus block that was for a task ----
+
+let lastTimer: { phase: string; task_id: number | null } = { phase: "idle", task_id: null };
+
+function showFinished() {
+  const resting = lastTimer.phase === "break" || lastTimer.phase === "callback";
+  const task = resting ? openTasks.find((t) => t.id === lastTimer.task_id) : undefined;
+  $("finished").hidden = !task;
+  if (task) $("finished-text").textContent = `Finished “${task.title}”?`;
+}
+
+$("mark-done").onclick = () =>
+  run(async () => {
+    await invoke("set_task_done", { id: lastTimer.task_id, done: true });
+    await loadTasks();
+  });
+
 threshold.onchange = () => {
   if (threshold.reportValidity())
     run(() => invoke("set_streak_threshold", { minutes: threshold.valueAsNumber }));
@@ -360,7 +458,7 @@ async function loadDay(streak: StreakState) {
 
 run(loadPresets);
 // Rust sends "tasks" after every feed sync, whether it ran on the half hour or from Settings
-const loadImports = () => Promise.all([loadTasks(), loadEvents(), loadFeeds()]);
+const loadImports = () => Promise.all([loadTasks(), loadEvents(), loadFeeds(), loadCourses()]);
 run(loadImports);
 run(() => listen("tasks", () => run(loadImports)));
 run(() =>
@@ -368,6 +466,13 @@ run(() =>
     $("idle").hidden = s.phase !== "idle";
     $("running").hidden = s.phase === "idle";
     $("phase").textContent = titles[s.phase];
+    $("working-on").hidden = !s.label;
+    $("working-on").textContent = s.label ?? "";
+    // a block just ended or began: the time spent on its task has changed
+    const changed = s.phase !== lastTimer.phase;
+    lastTimer = s;
+    if (changed) run(loadTasks);
+    else showFinished();
     $("clock").textContent = s.phase === "callback" ? "" : mmss(s.remaining);
     $("resume").hidden = s.phase !== "callback";
     $("skip").hidden = s.phase !== "break";

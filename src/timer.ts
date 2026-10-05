@@ -8,13 +8,14 @@ export type TimerState = {
   focus_min: number;
   break_min: number;
   label: string | null;
+  task_id: number | null; // the task this session is for (S-2)
   calls: number; // times the pet has called the user back from this break
   suggest_real_break: boolean;
 };
 
 type Action =
   | { action: "tick" | "skip_break" | "resume" | "stop" }
-  | { action: "start_focus"; focus_min: number; break_min: number; label?: string };
+  | { action: "start_focus"; focus_min: number; break_min: number; label?: string; task_id?: number };
 
 export const timer = (params: Action) => invoke<TimerState>("timer", { params });
 

@@ -143,13 +143,17 @@ struct Session {
     planned_min: f64,
     break_min: f64,
     label: Option<String>,
+    #[serde(default)]
+    task_id: Option<i64>, // S-2: the task the block was for
 }
 
 fn save_session(conn: &Connection, s: &Session) -> rusqlite::Result<()> {
     let iso = |secs: f64| DateTime::from_timestamp(secs as i64, 0).map(|t| t.to_rfc3339());
     conn.execute(
-        "INSERT INTO session (started_at, ended_at, planned_min, break_min, label) VALUES (?1, ?2, ?3, ?4, ?5)",
-        (iso(s.started_at), iso(s.ended_at), s.planned_min, s.break_min, &s.label),
+        // the subquery turns a task deleted or merged away mid-block into "no task", so the block is still kept
+        "INSERT INTO session (started_at, ended_at, planned_min, break_min, label, task_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, (SELECT id FROM task WHERE id = ?6))",
+        (iso(s.started_at), iso(s.ended_at), s.planned_min, s.break_min, &s.label, s.task_id),
     )?;
     Ok(())
 }
@@ -376,31 +380,210 @@ struct Task {
     done: bool,
     source: Option<String>, // where it was imported from, such as "canvas"
     removed: bool,          // imported, and no longer in its source's feed
+    spent_min: f64,         // focus time in sessions tied to it (S-2)
+    same_as: Option<SameAs>, // on a typed task: the imported task that looks like the same piece of work
+    left_min: Option<f64>,  // minutes until it is due; a task due on a day is due at the end of that day
+    work_min: f64,          // the work still to do, as far as the estimate and the time spent can tell
+    soon: bool,             // open, not yet due, and the time left is under twice the work left
+    ask_submitted: bool,    // imported, open and past due: the feed can't say whether it was handed in, so the pet asks
+    #[serde(skip)]
+    reminded_today: bool,
+    #[serde(skip)]
+    asked_since_due: bool,
+}
+
+const ASSUMED_ESTIMATE_MIN: f64 = 60.0; // for a task with no estimate, which is most imported ones
+const LEAST_WORK_MIN: f64 = 15.0; // a task that has used up its estimate but is not done still needs something
+const MARGIN: f64 = 2.0;
+
+/// The work a task still needs: its estimate less the focus time already spent on it.
+fn work_left(estimate_min: Option<i64>, spent_min: f64) -> f64 {
+    (estimate_min.map_or(ASSUMED_ESTIMATE_MIN, |m| m as f64) - spent_min).max(LEAST_WORK_MIN)
+}
+
+/// Spec: reminders are "timed by due date against the estimate, not by fixed alarms".
+fn due_soon(left_min: Option<f64>, work_min: f64) -> bool {
+    left_min.is_some_and(|left| left > 0.0 && left < MARGIN * work_min)
+}
+
+/// "2 h 30 min", "45 min".
+fn minutes_text(minutes: f64) -> String {
+    let m = minutes.round().max(1.0) as i64;
+    match (m / 60, m % 60) {
+        (0, m) => format!("{m} min"),
+        (h, 0) => format!("{h} h"),
+        (h, m) => format!("{h} h {m} min"),
+    }
+}
+
+/// What the pet says next, if anything: about the tasks that have just become due soon (each once a day),
+/// or else about the imported tasks whose due time has just passed (each once). The ones spoken about are
+/// marked, so the same thing is not said again.
+fn take_reminder(conn: &Connection) -> rusqlite::Result<Option<String>> {
+    let all = tasks(conn)?;
+    let mut soon: Vec<&Task> = all.iter().filter(|t| t.soon && !t.reminded_today).collect();
+    let mut asks: Vec<&Task> = all.iter().filter(|t| t.ask_submitted && !t.asked_since_due).collect();
+    let nearest = |a: &&Task, b: &&Task| a.left_min.partial_cmp(&b.left_min).unwrap_or(std::cmp::Ordering::Equal);
+    soon.sort_by(nearest); // the one due first is the one named
+    asks.sort_by(|a, b| nearest(b, a)); // the one that passed most recently
+    // ponytail: one kind per bubble. If both are waiting, the question comes at the next check, a minute
+    // later, and takes the reminder's place in the bubble.
+    let (spoken, text) = match (soon.first(), asks.first()) {
+        (Some(first), _) => {
+            let more = match soon.len() - 1 {
+                0 => String::new(),
+                1 => " 1 more is due soon.".into(),
+                n => format!(" {n} more are due soon."),
+            };
+            let (left, work) = (minutes_text(first.left_min.unwrap_or(0.0)), minutes_text(first.work_min));
+            let text = format!("“{}” is due in {left} and needs about {work}. Start now?{more}", short_title(&first.title));
+            (soon, text)
+        }
+        (None, Some(first)) => {
+            let more = match asks.len() - 1 {
+                0 => String::new(),
+                n => format!(" {n} more to check."),
+            };
+            let text = format!("“{}” was due. Did you submit it?{more}", short_title(&first.title));
+            (asks, text)
+        }
+        (None, None) => return Ok(None),
+    };
+    for task in spoken {
+        conn.execute("UPDATE task SET reminded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?1", [task.id])?;
+    }
+    Ok(Some(text))
+}
+
+/// The bubble is small, so a long title is cut.
+fn short_title(title: &str) -> String {
+    if title.chars().count() > 40 {
+        title.chars().take(39).chain(['…']).collect()
+    } else {
+        title.into()
+    }
+}
+
+#[derive(Serialize, Clone)]
+struct SameAs {
+    id: i64,
+    title: String,
+    source: String,
+}
+
+/// "STAT 310" and "STATISTC 310" are the same course to a student: compare the number alone.
+fn course_number(course: &str) -> String {
+    course.chars().skip_while(|c| !c.is_ascii_digit()).take_while(|c| c.is_ascii_digit()).collect()
 }
 
 /// Open tasks by due date (undated last), then the ones checked off today.
+/// An imported task whose course is unticked in Settings is left out.
 fn tasks(conn: &Connection) -> rusqlite::Result<Vec<Task>> {
+    let mut tasks: Vec<Task> = conn
+        .prepare(
+            "SELECT id, title, course, coalesce(due_date, date(due_at, 'localtime')) AS due, estimate_min, status = 'done',
+                    (SELECT min(source) FROM task_source_link WHERE task_id = task.id) AS source,
+                    EXISTS (SELECT 1 FROM task_source_link WHERE task_id = task.id AND removed_at IS NOT NULL),
+                    coalesce((SELECT sum((julianday(ended_at) - julianday(started_at)) * 1440) FROM session WHERE task_id = task.id), 0.0),
+                    (julianday(coalesce(due_at, datetime(due_date, '+1 day', 'utc'))) - julianday('now')) * 1440,
+                    coalesce(date(reminded_at, 'localtime') = date('now', 'localtime'), 0),
+                    coalesce(julianday(reminded_at) >= julianday(coalesce(due_at, datetime(due_date, '+1 day', 'utc'))), 0)
+             FROM task
+             WHERE hidden_at IS NULL AND (status = 'todo' OR date(done_at, 'localtime') = date('now', 'localtime'))
+               AND NOT (EXISTS (SELECT 1 FROM task_source_link WHERE task_id = task.id) AND coalesce(course, '') IN (
+                    SELECT value FROM json_each(coalesce((SELECT value FROM setting WHERE key = 'hidden_courses'), '[]'))))
+             ORDER BY status = 'done', due IS NULL, due, id",
+        )?
+        .query_map([], |r| {
+            let (estimate_min, done, spent_min): (Option<i64>, bool, f64) = (r.get(4)?, r.get(5)?, r.get(8)?);
+            let left_min: Option<f64> = r.get(9)?;
+            let work_min = work_left(estimate_min, spent_min);
+            let source: Option<String> = r.get(6)?;
+            Ok(Task {
+                id: r.get(0)?,
+                title: r.get(1)?,
+                course: r.get(2)?,
+                due: r.get(3)?,
+                estimate_min,
+                done,
+                ask_submitted: !done && source.is_some() && left_min.is_some_and(|left| left <= 0.0),
+                asked_since_due: r.get(11)?,
+                source,
+                removed: r.get(7)?,
+                spent_min,
+                same_as: None,
+                left_min,
+                work_min,
+                soon: !done && due_soon(left_min, work_min),
+                reminded_today: r.get(10)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+
+    // A typed task and an imported one are suggested as the same work when both are open, due the same day
+    // and in a course with the same number. The user confirms; nothing merges by itself.
+    // ponytail: two imported matches (two things due that day in one course) means no suggestion at all.
+    // Compare titles too if that turns out to be common.
+    let key = |t: &Task| match (&t.due, t.course.as_deref().map(course_number)) {
+        (Some(due), Some(number)) if !t.done && !number.is_empty() => Some((due.clone(), number)),
+        _ => None,
+    };
+    let imported: Vec<_> = tasks.iter().filter_map(|t| Some((key(t)?, t.id, t.title.clone(), t.source.clone()?))).collect();
+    for task in tasks.iter_mut().filter(|t| t.source.is_none()) {
+        let Some(k) = key(task) else { continue };
+        let mut matches = imported.iter().filter(|(other, ..)| *other == k);
+        if let (Some((_, id, title, source)), None) = (matches.next(), matches.next()) {
+            task.same_as = Some(SameAs { id: *id, title: title.clone(), source: source.clone() });
+        }
+    }
+    Ok(tasks)
+}
+
+/// Makes a typed task and an imported one a single task: the imported row stays, so its source link and the
+/// title, course and due date the source owns stay with it, and it takes the typed task's estimate (if it
+/// had one) and its focus time. There is no undo.
+fn merge_tasks(conn: &Connection, typed: i64, imported: i64) -> rusqlite::Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    let linked = |id: i64| tx.query_row("SELECT EXISTS (SELECT 1 FROM task_source_link WHERE task_id = ?1)", [id], |r| r.get::<_, bool>(0));
+    if linked(typed)? || !linked(imported)? {
+        return Err(rusqlite::Error::InvalidQuery); // not a typed task and an imported one
+    }
+    tx.execute(
+        "UPDATE task SET estimate_min = coalesce((SELECT estimate_min FROM task WHERE id = ?1), estimate_min)
+         WHERE id = ?2",
+        (typed, imported),
+    )?;
+    tx.execute("UPDATE session SET task_id = ?2 WHERE task_id = ?1", (typed, imported))?;
+    if tx.execute("DELETE FROM task WHERE id = ?1", [typed])? == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    tx.commit()
+}
+
+/// The courses open imported tasks belong to, with whether each is shown. Unticking one in Settings hides
+/// its imported tasks from the list; nothing is deleted, and ticking it again brings them back.
+fn courses(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
     conn.prepare(
-        "SELECT id, title, course, coalesce(due_date, date(due_at, 'localtime')) AS due, estimate_min, status = 'done',
-                (SELECT min(source) FROM task_source_link WHERE task_id = task.id),
-                EXISTS (SELECT 1 FROM task_source_link WHERE task_id = task.id AND removed_at IS NOT NULL)
+        "SELECT course, count(*),
+                course IN (SELECT value FROM json_each(coalesce((SELECT value FROM setting WHERE key = 'hidden_courses'), '[]')))
          FROM task
-         WHERE hidden_at IS NULL AND (status = 'todo' OR date(done_at, 'localtime') = date('now', 'localtime'))
-         ORDER BY status = 'done', due IS NULL, due, id",
+         WHERE course IS NOT NULL AND hidden_at IS NULL AND status = 'todo'
+           AND EXISTS (SELECT 1 FROM task_source_link WHERE task_id = task.id)
+         GROUP BY course ORDER BY course",
     )?
-    .query_map([], |r| {
-        Ok(Task {
-            id: r.get(0)?,
-            title: r.get(1)?,
-            course: r.get(2)?,
-            due: r.get(3)?,
-            estimate_min: r.get(4)?,
-            done: r.get(5)?,
-            source: r.get(6)?,
-            removed: r.get(7)?,
-        })
-    })?
+    .query_map([], |r| Ok(json!({ "course": r.get::<_, String>(0)?, "open": r.get::<_, i64>(1)?, "hidden": r.get::<_, bool>(2)? })))?
     .collect()
+}
+
+fn set_course_shown(conn: &Connection, course: &str, shown: bool) -> rusqlite::Result<()> {
+    let saved = setting(conn, "hidden_courses")?.unwrap_or_else(|| "[]".into());
+    let mut hidden: Vec<String> = serde_json::from_str(&saved).unwrap_or_default();
+    hidden.retain(|c| c != course);
+    if !shown {
+        hidden.push(course.into());
+    }
+    conn.execute("INSERT OR REPLACE INTO setting (key, value) VALUES ('hidden_courses', ?1)", [json!(hidden).to_string()])?;
+    Ok(())
 }
 
 fn set_done(conn: &Connection, id: i64, done: bool) -> rusqlite::Result<usize> {
@@ -443,6 +626,21 @@ fn remove_task(conn: &Connection, id: i64) -> rusqlite::Result<()> {
 #[tauri::command]
 fn delete_task(db: State<Db>, id: i64) -> Result<(), String> {
     remove_task(&db.0.lock().unwrap(), id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn merge_task(db: State<Db>, typed: i64, imported: i64) -> Result<(), String> {
+    merge_tasks(&db.0.lock().unwrap(), typed, imported).map_err(|_| "those two tasks can't be merged".to_string())
+}
+
+#[tauri::command]
+fn list_courses(db: State<Db>) -> Result<Vec<Value>, String> {
+    courses(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_course(db: State<Db>, course: String, shown: bool) -> Result<(), String> {
+    set_course_shown(&db.0.lock().unwrap(), &course, shown).map_err(|e| e.to_string())
 }
 
 // ---- Imports: feeds parsed by backend/feeds.py ----
@@ -967,11 +1165,22 @@ pub fn run() {
             std::thread::spawn(move || {
                 for second in 1u64.. {
                     std::thread::sleep(std::time::Duration::from_secs(1));
-                    if let Err(e) = timer_action(&handle, json!({ "action": "tick" })) {
+                    let state = timer_action(&handle, json!({ "action": "tick" }));
+                    if let Err(e) = &state {
                         eprintln!("timer tick failed: {e}");
                     }
                     // once a minute, so "today" rolls over at midnight while the pet stays open
                     if second % 60 == 0 {
+                        // a task that has become due soon is mentioned by the pet, but never during a focus
+                        // block: it waits, unmarked, and the first check after the block ends picks it up
+                        if state.is_ok_and(|s| s["phase"] != "focus") {
+                            let text = take_reminder(&handle.state::<Db>().0.lock().unwrap());
+                            match text {
+                                Ok(Some(text)) => drop(handle.emit("reminder", text)),
+                                Ok(None) => {}
+                                Err(e) => eprintln!("reminder check failed: {e}"),
+                            }
+                        }
                         if let Err(e) = streak_state(&handle) {
                             eprintln!("streak refresh failed: {e}");
                         }
@@ -1038,6 +1247,9 @@ pub fn run() {
             list_tasks,
             set_task_done,
             delete_task,
+            merge_task,
+            list_courses,
+            set_course,
             feeds,
             set_feed,
             set_feed_file,
@@ -1062,7 +1274,7 @@ mod tests {
         let n: i64 = conn.query_row("SELECT count(*) FROM preset", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 2);
 
-        let s = Session { started_at: 0.0, ended_at: 1500.0, planned_min: 25.0, break_min: 5.0, label: None };
+        let s = Session { started_at: 0.0, ended_at: 1500.0, planned_min: 25.0, break_min: 5.0, label: None, task_id: None };
         save_session(&conn, &s).unwrap();
         let ended: String = conn.query_row("SELECT ended_at FROM session", [], |r| r.get(0)).unwrap();
         assert_eq!(ended, "1970-01-01T00:25:00+00:00");
@@ -1298,7 +1510,7 @@ mod tests {
         init_db(&conn).unwrap();
         // starts now, so it lands on today whatever the local time is
         let now = chrono::Utc::now().timestamp() as f64;
-        let s = Session { started_at: now, ended_at: now + 30.0 * 60.0, planned_min: 30.0, break_min: 5.0, label: None };
+        let s = Session { started_at: now, ended_at: now + 30.0 * 60.0, planned_min: 30.0, break_min: 5.0, label: None, task_id: None };
         save_session(&conn, &s).unwrap();
 
         let day = day_data(&conn).unwrap();
@@ -1375,5 +1587,128 @@ mod tests {
         std::fs::write(dir.join("google_client.json"), r#"{"installed":{"client_id":"id","client_secret":"s","project_id":"p"}}"#).unwrap();
         assert_eq!(google_client(&dir).unwrap(), json!({ "client_id": "id", "client_secret": "s" }));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn sessions_tie_to_tasks_typed_merges_into_imported_and_courses_hide() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        let typed = |title: &str, course: Option<&str>, due: Option<&str>, estimate: Option<i64>| {
+            let t = NewTask { title: title.into(), course: course.map(Into::into), due_date: due.map(Into::into), estimate_min: estimate };
+            insert_task(&conn, &t).unwrap()
+        };
+        let feed: Vec<FeedItem> = serde_json::from_value(json!([
+            { "kind": "task", "uid": "event-assignment-1", "title": "Homework 3", "course": "STATISTC 310", "due_at": null, "due_date": "2030-01-11" },
+            { "kind": "task", "uid": "event-assignment-2", "title": "Lab 2", "course": "BIOLOGY 151", "due_at": null, "due_date": "2030-01-11" },
+            { "kind": "task", "uid": "event-assignment-3", "title": "Quiz A", "course": "COMPSCI 230", "due_at": null, "due_date": "2030-01-12" },
+            { "kind": "task", "uid": "event-assignment-4", "title": "Quiz B", "course": "COMPSCI 230", "due_at": null, "due_date": "2030-01-12" }
+        ]))
+        .unwrap();
+        sync_feed(&conn, "canvas", &feed, "2030-01-01T00:00:00Z").unwrap();
+        let hw = typed("HW3", Some("STAT 310"), Some("2030-01-11"), Some(120));
+        let other_day = typed("HW4", Some("STAT 310"), Some("2030-01-18"), None);
+        let no_course = typed("read chapter", None, Some("2030-01-11"), None);
+        let two_matches = typed("quiz", Some("CS 230"), Some("2030-01-12"), None);
+        let find = |id: i64| tasks(&conn).unwrap().into_iter().find(|t| t.id == id);
+        let canvas_hw = tasks(&conn).unwrap().into_iter().find(|t| t.title == "Homework 3").unwrap().id;
+
+        // S-2: a block tied to a task counts toward it; one tied to a task that is gone is kept, untied
+        let block = |task_id: Option<i64>| Session { started_at: 0.0, ended_at: 45.0 * 60.0, planned_min: 50.0, break_min: 10.0, label: None, task_id };
+        save_session(&conn, &block(Some(hw))).unwrap();
+        save_session(&conn, &block(Some(9999))).unwrap();
+        save_session(&conn, &block(None)).unwrap();
+        assert_eq!(find(hw).unwrap().spent_min.round(), 45.0);
+        assert_eq!(conn.query_row("SELECT count(*) FROM session WHERE task_id IS NULL", [], |r| r.get::<_, i64>(0)).unwrap(), 2);
+
+        // the task id makes the whole trip: into the Python timer with the start, back out with the finished block
+        let backend = Backend::default();
+        let start = json!({ "action": "start_focus", "focus_min": 25, "break_min": 5, "label": "HW3", "task_id": hw });
+        assert_eq!(sidecar_call(&backend, "timer", Some(start)).unwrap()["task_id"], hw);
+        let mut stopped = sidecar_call(&backend, "timer", Some(json!({ "action": "stop" }))).unwrap();
+        let finished: Vec<Session> = serde_json::from_value(stopped["sessions"].take()).unwrap();
+        assert_eq!(finished.iter().map(|s| s.task_id).collect::<Vec<_>>(), [Some(hw)]);
+
+        // same due day and course number: suggested, and only then
+        assert_eq!(find(hw).unwrap().same_as.map(|s| (s.id, s.title, s.source)), Some((canvas_hw, "Homework 3".into(), "canvas".into())));
+        for id in [other_day, no_course, two_matches, canvas_hw] {
+            assert!(find(id).unwrap().same_as.is_none(), "{id}");
+        }
+
+        // only a typed task merges into an imported one
+        assert!(merge_tasks(&conn, canvas_hw, hw).is_err());
+        assert!(merge_tasks(&conn, hw, other_day).is_err());
+        merge_tasks(&conn, hw, canvas_hw).unwrap();
+        assert!(find(hw).is_none());
+        let merged = find(canvas_hw).unwrap();
+        assert_eq!((merged.title.as_str(), merged.estimate_min, merged.spent_min.round(), merged.source.as_deref()), ("Homework 3", Some(120), 45.0, Some("canvas")));
+        // the next sync updates the merged task in place and does not import a second copy
+        let before = tasks(&conn).unwrap().len();
+        sync_feed(&conn, "canvas", &feed, "2030-01-02T00:00:00Z").unwrap();
+        assert_eq!((tasks(&conn).unwrap().len(), find(canvas_hw).unwrap().estimate_min), (before, Some(120)));
+
+        // reminders: due date against the work left, each task once a day
+        assert!(!due_soon(None, 60.0) && !due_soon(Some(-5.0), 60.0) && !due_soon(Some(120.0), 60.0) && due_soon(Some(119.0), 60.0));
+        assert_eq!((work_left(None, 0.0), work_left(Some(120), 45.0), work_left(Some(30), 50.0)), (60.0, 75.0, 15.0));
+        assert_eq!((minutes_text(150.0), minutes_text(45.4), minutes_text(120.0), minutes_text(0.2)), ("2 h 30 min".into(), "45 min".into(), "2 h".into(), "1 min".into()));
+        assert_eq!(take_reminder(&conn).unwrap(), None); // everything so far is due in 2030
+        let due_in = |title: &str, minutes: i64, estimate: Option<i64>| {
+            let id = typed(title, None, None, estimate);
+            let at = (chrono::Utc::now() + chrono::Duration::minutes(minutes)).format("%Y-%m-%dT%H:%M:%SZ").to_string();
+            conn.execute("UPDATE task SET due_at = ?2 WHERE id = ?1", (id, at)).unwrap();
+            id
+        };
+        let essay = due_in("Essay", 150, Some(120)); // 2 h 30 min left for 2 h of work
+        let later = due_in("Reading", 150, None); // 2 h 30 min left for an assumed hour: not yet
+        let passed = due_in("Missed", -10, Some(120));
+        let done = due_in("Done already", 30, None);
+        set_done(&conn, done, true).unwrap();
+        assert_eq!([essay, later, passed, done].map(|id| find(id).unwrap().soon), [true, false, false, false]);
+        assert_eq!(take_reminder(&conn).unwrap().as_deref(), Some("“Essay” is due in 2 h 30 min and needs about 2 h. Start now?"));
+        assert_eq!(take_reminder(&conn).unwrap(), None); // said once today
+        assert!(find(essay).unwrap().soon); // the mark on its row stays
+        // time spent on the task shrinks the work left, and two at once are counted
+        conn.execute("UPDATE task SET reminded_at = '2020-01-01T00:00:00Z'", []).unwrap();
+        save_session(&conn, &block(Some(essay))).unwrap();
+        due_in("A very long title that would not fit in the pet's little speech bubble", 20, None);
+        assert_eq!(
+            take_reminder(&conn).unwrap().as_deref(),
+            Some("“A very long title that would not fit in…” is due in 20 min and needs about 1 h. Start now? 1 more is due soon.")
+        );
+        assert_eq!(find(essay).unwrap().work_min.round(), 75.0);
+
+        // "Did you submit it?": asked once when an imported task's due time has passed; a typed one is never asked about
+        let lab = tasks(&conn).unwrap().into_iter().find(|t| t.title == "Lab 2").unwrap().id;
+        assert_eq!([lab, passed, essay].map(|id| find(id).unwrap().ask_submitted), [false, false, false]);
+        conn.execute("UPDATE task SET due_date = '2021-03-04' WHERE id = ?1", [lab]).unwrap();
+        assert!(find(lab).unwrap().ask_submitted);
+        assert_eq!(take_reminder(&conn).unwrap().as_deref(), Some("“Lab 2” was due. Did you submit it?"));
+        assert_eq!(take_reminder(&conn).unwrap(), None);
+        assert!(find(lab).unwrap().ask_submitted); // the question stays on its row until it is answered
+        // a new due date that passes is a new question, and a due-soon reminder goes first
+        // (the first question is back-dated to just after the old due date, as it would be in real use)
+        conn.execute(
+            "UPDATE task SET due_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-1 minute'), due_date = NULL, reminded_at = '2021-03-06T00:00:00Z' WHERE id = ?1",
+            [lab],
+        )
+        .unwrap();
+        let quiz = tasks(&conn).unwrap().into_iter().find(|t| t.title == "Quiz A").unwrap().id;
+        conn.execute("UPDATE task SET due_at = '2021-03-04T10:00:00Z', due_date = NULL WHERE id = ?1", [quiz]).unwrap();
+        due_in("Problem set", 30, None);
+        assert_eq!(take_reminder(&conn).unwrap().as_deref(), Some("“Problem set” is due in 30 min and needs about 1 h. Start now?"));
+        assert_eq!(take_reminder(&conn).unwrap().as_deref(), Some("“Lab 2” was due. Did you submit it? 1 more to check."));
+        set_done(&conn, lab, true).unwrap();
+        assert!(!find(lab).unwrap().ask_submitted);
+
+        // unticking a course hides its imported tasks only, and ticking it brings them back
+        let shown = || json!(courses(&conn).unwrap());
+        assert_eq!(shown()[0], json!({ "course": "COMPSCI 230", "open": 2, "hidden": false })); // the lab is done, so BIOLOGY 151 has nothing open
+        set_course_shown(&conn, "COMPSCI 230", false).unwrap();
+        set_course_shown(&conn, "COMPSCI 230", false).unwrap();
+        let typed_230 = typed("my own", Some("COMPSCI 230"), None, None);
+        assert_eq!(shown()[0], json!({ "course": "COMPSCI 230", "open": 2, "hidden": true }));
+        let titles = || tasks(&conn).unwrap().into_iter().map(|t| t.title).collect::<Vec<_>>();
+        assert!(!titles().contains(&"Quiz A".to_string()) && find(typed_230).is_some());
+        set_course_shown(&conn, "COMPSCI 230", true).unwrap();
+        assert!(titles().contains(&"Quiz A".to_string()) && titles().contains(&"Quiz B".to_string()));
     }
 }

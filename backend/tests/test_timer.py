@@ -15,13 +15,13 @@ def at(timer, now):
 class TimerTest(unittest.TestCase):
     def test_focus_break_callback_cycle(self):
         t = Timer()
-        t.start_focus(0, 25, 5, "HW3")
-        self.assertEqual(at(t, 10 * MIN), at(t, 10 * MIN) | {"phase": "focus", "remaining": 15 * MIN})
+        t.start_focus(0, 25, 5, "HW3", task_id=7)
+        self.assertEqual(at(t, 10 * MIN), at(t, 10 * MIN) | {"phase": "focus", "remaining": 15 * MIN, "task_id": 7})
 
         self.assertEqual(at(t, 25 * MIN)["phase"], "break")
         self.assertEqual(t.state(25 * MIN)["remaining"], 5 * MIN)
         self.assertEqual(t.drain_finished(), [
-            {"started_at": 0, "ended_at": 25 * MIN, "planned_min": 25, "break_min": 5, "label": "HW3"}
+            {"started_at": 0, "ended_at": 25 * MIN, "planned_min": 25, "break_min": 5, "label": "HW3", "task_id": 7}
         ])
         self.assertEqual(t.drain_finished(), [])
 
@@ -63,7 +63,7 @@ class TimerTest(unittest.TestCase):
         t.start_focus(0, 25, 5)
         self.assertEqual(at(t, 3 * 60 * MIN) | {"label": None}, {
             "phase": "callback", "remaining": 0, "focus_min": 25, "break_min": 5,
-            "label": None, "calls": 2, "suggest_real_break": False,
+            "label": None, "task_id": None, "calls": 2, "suggest_real_break": False,
         })
         self.assertEqual(t.drain_finished()[0]["ended_at"], 25 * MIN)
 

@@ -68,7 +68,7 @@ flowchart TD
 - Two views: Today and All. Today is built at 7 am or first wake.
 - Canvas assignments and calendar events merged into the list, never written back.
 - A session can be tied to a task (S-2).
-- Typed quick commands, such as "start 50 minutes" (P-4).
+- Typed quick commands, such as "start 50 minutes" (P-4). Optional, skipped for now.
 - Reminders timed by due date against the estimate, held until the next break.
 
 **Uses:** new `task`, `task_source_link` and `calendar_event` tables in SQLite, the Canvas calendar feed (ICS), Google Calendar's secret iCal address or a read-only sign-in (OAuth, with the refresh token in the macOS Keychain), the `icalendar`, `recurring-ical-events` and `certifi` packages, a separate task-fetcher process that is the only one with network access (PR-6). Feed addresses and the Google token are in the macOS Keychain; the database itself is not encrypted yet, so PR-4 is only partly met (see `KNOWN_ISSUES.md`).
@@ -93,11 +93,13 @@ flowchart TD
 - [x] Try the Google import against a real calendar or export (only a made-up feed so far)
 - [x] Google Calendar by read-only OAuth, so the calendar updates without uploading a file again (primary calendar only; design in `google_calendar_oauth.md`; signed in from the dev app on 2026-10-05, the everyday app gets it when Phase 2 is finished)
 - [x] Feed addresses in the OS keychain (PR-4): moved at launch in the dev app; an uploaded .ics file's text is still in the database
-- [ ] Merge a typed task with its imported copy
-- [ ] Let the user choose which courses and calendars to import
-- [ ] Tie a session to a task; show time spent against the estimate. When a tied focus block ends, the pet asks "Finished it?" and a yes checks the task off
-- [ ] Quick commands
-- [ ] Reminders at breaks and the morning brief. For a Canvas task whose due time has passed, the pet asks once at the next break, "Did you submit it?"; a yes checks it off (this stands in for Canvas submission status, which needs an API token the school does not give out)
+- [x] Merge a typed task with its imported copy (the pet suggests when the due day and course number match; the user confirms)
+- [x] Let the user choose which courses to show (checkboxes in Settings). Choosing Google calendars is left out: the primary calendar had everything
+- [x] Tie a session to a task; show time spent against the estimate. When a tied focus block ends, the panel asks "Finished it?" and a yes checks the task off (in the panel only, not yet in the pet's bubble)
+- [ ] Quick commands (optional, for a later build; skipped on 2026-10-05 and not needed to finish Phase 2. Every action they would cover is already a click or two, and "I'm relaxing" needs the modes from Phase 3)
+- [x] Task reminders: the pet speaks up when the time left until a task is due falls under twice the work left (estimate less time spent; 1 hour assumed with no estimate). Once a day per task, never during a focus block, and the task's row is marked "start soon"
+- [ ] Later: hold reminders for the next break with the spec's "unless due within 2 hours" rule, and the morning brief
+- [x] "Did you submit it?": once a Canvas task's due time has passed, the pet asks once (not during a focus block), and the task's row has a "Did you submit it? Yes" button that checks it off. This stands in for Canvas submission status, which needs an API token the school does not give out
 
 **Decided:** `icalendar` with `recurring-ical-events` parses ICS. OAuth uses no library: the standard library covers the sign-in, and the `security` tool reaches the Keychain.
 

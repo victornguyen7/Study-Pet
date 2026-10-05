@@ -29,6 +29,9 @@
               <label>Break <input id="break" type="number" min="1" value="5" required /> min</label>
             </div>
             <div class="row">
+              <label>Working on <select id="task-pick"><option value="">No task</option></select></label>
+            </div>
+            <div class="row">
               <button class="primary">Start focus</button>
               <button type="button" id="save">Save as preset</button>
             </div>
@@ -37,11 +40,16 @@
 
         <div id="running" hidden>
           <h1 id="phase"></h1>
+          <p id="working-on" hidden></p>
           <p id="clock" role="timer"></p>
           <div class="row">
             <button id="resume" class="primary">I'm back</button>
             <button id="skip">Skip break</button>
             <button id="stop">Stop session</button>
+          </div>
+          <div id="finished" class="row" hidden>
+            <span id="finished-text"></span>
+            <button id="mark-done">Yes, check it off</button>
           </div>
         </div>
       </section>
@@ -106,6 +114,11 @@
           No address? In Google Calendar open Settings, “Import &amp; export”, then Export. Unzip the download and
           upload the .ics file. A file does not update itself: upload a new one when your calendar changes.
         </p>
+      </section>
+      <section id="courses" hidden>
+        <h2>Courses</h2>
+        <ul id="course-list" class="rows"></ul>
+        <p class="muted">Untick a course to hide its imported assignments. Nothing is deleted; tick it to bring them back.</p>
       </section>
       <section>
         <h2>Pet</h2>

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
 import { onStreak } from "../streak";
 import { onTimer, type TimerState } from "../timer";
@@ -22,7 +23,18 @@ pet.addEventListener("mousemove", (e) => {
   }
 });
 pet.addEventListener("click", () => {
-  if (!dragged) invoke("toggle_panel");
+  if (dragged) return;
+  reminder = ""; // opening the panel is the answer to it
+  invoke("toggle_panel");
+});
+
+// A task that has become due soon, or an imported one that has passed its due time and may have been
+// handed in (take_reminder in src-tauri/src/lib.rs). Rust never sends one during a
+// focus block. It stays in the bubble until the pet is clicked or a focus block starts.
+let reminder = "";
+listen<string>("reminder", (e) => {
+  reminder = e.payload;
+  getCurrentWindow().show();
 });
 
 function line(s: TimerState): string {
@@ -53,7 +65,9 @@ async function resize(grow: boolean) {
 let lastCalls = 0;
 onTimer((s) => {
   pet.classList.toggle("watching", s.phase === "focus"); // P-2
-  const text = line(s);
+  if (s.phase === "focus") reminder = "";
+  // the call back from a break comes first; otherwise a reminder is worth more than "stand up and stretch"
+  const text = s.phase === "callback" ? line(s) : reminder || line(s);
   bubble.textContent = text;
   if (!text) bubble.hidden = true; // hide before shrinking, show after growing
   resize(!!text).then(() => (bubble.hidden = !text));

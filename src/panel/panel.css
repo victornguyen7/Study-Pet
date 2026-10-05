@@ -258,6 +258,53 @@ form {
   margin-bottom: 4px;
 }
 
+/* a task's own start button, and the suggestion that it is the same as an imported one */
+#tasks .start,
+#tasks .merge {
+  padding: 1px 8px;
+  font-size: 13px;
+}
+
+#tasks .merge {
+  border-style: dashed;
+  color: var(--muted);
+  text-align: left;
+}
+
+#tasks li {
+  flex-wrap: wrap;
+}
+
+/* the due date is closer than twice the work left */
+#tasks .soon {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--star) 22%, transparent);
+  color: var(--star);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#task-pick {
+  max-width: 220px;
+  padding: 4px 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font: inherit;
+  color: inherit;
+}
+
+#working-on {
+  margin: 0;
+  font-weight: 600;
+}
+
+#finished {
+  margin-top: 10px;
+}
+
 #task-text {
   flex: 1;
   min-width: 0;

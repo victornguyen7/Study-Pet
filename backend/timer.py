@@ -18,15 +18,16 @@ class Timer:
         self.started_at = self.ends_at = 0.0
         self.focus_min = self.break_min = 0
         self.label = None
+        self.task_id = None  # S-2: the task this session is for, if any
         self.calls = 0  # how many times the pet has called the user back from this break
         self.skipped = 0  # breaks skipped in a row
         self.finished = []  # completed focus blocks, waiting for the app to store them
 
-    def start_focus(self, now, focus_min, break_min, label=None):
+    def start_focus(self, now, focus_min, break_min, label=None, task_id=None):
         if not (focus_min > 0 and break_min > 0):
             raise ValueError("focus_min and break_min must be positive")
         self._end_focus(now)
-        self.focus_min, self.break_min, self.label = focus_min, break_min, label
+        self.focus_min, self.break_min, self.label, self.task_id = focus_min, break_min, label, task_id
         self.skipped = 0
         self._focus(now)
 
@@ -66,6 +67,7 @@ class Timer:
             "focus_min": self.focus_min,
             "break_min": self.break_min,
             "label": self.label,
+            "task_id": self.task_id,
             "calls": self.calls if self.phase == "callback" else 0,
             "suggest_real_break": self.phase == "break" and self.skipped >= SKIPS_BEFORE_SUGGESTION,
         }
@@ -88,4 +90,5 @@ class Timer:
                 "planned_min": self.focus_min,
                 "break_min": self.break_min,
                 "label": self.label,
+                "task_id": self.task_id,
             })

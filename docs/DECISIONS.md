@@ -237,10 +237,34 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** an assignment that was genuinely missed before the feed was connected never appears.
 - **Revisit when:** a missed assignment from before the connection goes unnoticed. (A Canvas API token would have settled this; that route is closed, see the next entry.)
 
+### Duplicates are suggested, never merged automatically
+- **Why:** decided 2026-10-05. The spec says duplicates "merge on course, fuzzy title and due date", but a typed title and Canvas's rarely match ("HW3", "Homework 3"), and a wrong automatic merge silently removes a task. So `tasks()` only marks a typed task with its likely imported copy (same due day, same course number, exactly one match), and the panel offers a Merge button. The imported row is the one kept: the source owns its title, course and due date and would overwrite them at the next sync anyway. The typed task gives up its estimate and its sessions.
+- **Rejected:** merging at sync time; fuzzy title matching; a manual "merge with..." picker.
+- **Gave up:** no undo, no way to dismiss a suggestion, no match for a typed task without a course.
+- **Revisit when:** suggestions are often wrong or often missing.
+
+### Choosing courses hides tasks at list time; calendars are not chosen
+- **Why:** decided 2026-10-05. The unticked courses are a JSON list in the `setting` table (`hidden_courses`), applied in the `tasks()` query to imported tasks only. Everything is still imported, so ticking a course again brings its tasks straight back and no sync is needed. Google stays on the primary calendar because it was missing nothing.
+- **Gave up:** hidden courses still take space in the database and in the sync counts; Canvas calendar events are not filtered.
+- **Revisit when:** another calendar is wanted, or Canvas events from a hidden course get in the way.
+
+### A session's task travels through the Python timer, like its label
+- **Why:** decided 2026-10-05. `session.task_id` already existed. The timer in `backend/timer.py` holds the running block, so the task id goes in with `start_focus` and comes back on each finished block, and Rust stores it. The id stays for every block of the session, so "resume" after a break keeps the task. Saving goes through a subquery, so a task deleted or merged away mid-block leaves the block saved with no task instead of failing.
+- **Gave up:** "Finished it?" is asked in the panel only.
+- **Revisit when:** the pet's bubble gets buttons.
+
+### A reminder compares the time left with the work left
+- **Why:** decided 2026-10-05, from the spec's "timed by due date against the estimate, not by fixed alarms". A task is "due soon" when the time left is under twice the work left (`MARGIN`); the work left is the estimate less the focus time in sessions tied to the task. A task with no estimate is taken as 1 hour, because most imported tasks have none and would otherwise never be mentioned, and work left never goes below 15 minutes. A task due on a day, with no time, is due at the end of that day. The rule is two small functions in `lib.rs` (`work_left`, `due_soon`) and the text is built there too, so the pet only shows a string.
+- **When it is said:** Rust checks once a minute and skips the check while a focus block runs. The task is left unmarked, so the first check after the block ends picks it up; no queue is kept. Each task is mentioned once a day.
+- **Rejected:** showing it mid-focus; a bubble-free mark only; 1.5 and 3 as the margin; never reminding about a task with no estimate.
+- **Gave up:** the spec's "held until the next break, unless the task is due within 2 hours": an urgent task still waits for the block to end. No morning brief. One bubble names one task and counts the rest.
+- **Revisit when:** the margin feels early or late (it is one constant), or a block ends with too little time left for a task that became due during it.
+
 ### No Canvas API token; the pet asks whether work was submitted
 - **Why:** decided 2026-10-05. The school does not let students create a Canvas API token, and the calendar feed carries no submission status, so the pet cannot know an assignment was handed in. Checking off by hand already works and a sync keeps the done status. To make that nearly free, the pet asks once at the first break after a Canvas task's due time ("Did you submit it?") and when a focus block tied to a task ends ("Finished it?"). Both ride on roadmap tasks that were already planned (reminders at breaks, tying a session to a task), so nothing new is built for this alone.
 - **Rejected:** scraping Canvas with the browser's login; fragile, and it means holding a session that can do anything the student can. Hiding a task a few days after its due date; it could hide work that was never done.
-- **Gave up:** real submission status. A task the user never answers about stays overdue until checked off or deleted.
+- **How it was built:** the question after the due time shares the reminder check (`take_reminder`): once a minute, skipped during a focus block, so it comes when the block ends, not strictly "at the first break". `reminded_at` records it; a task counts as asked when that time is at or after its due time, so a due date moved later by Canvas is asked about again. The yes is a button on the task's row. "Finished it?" came with tying a session to a task.
+- **Gave up:** real submission status. A task the user never answers about stays overdue until checked off or deleted. The question cannot be answered from the bubble, and there is no "no".
 - **Revisit when:** the school allows tokens, or overdue Canvas tasks pile up in Today.
 
 ### A task missing from the feed is flagged only if it is not yet past

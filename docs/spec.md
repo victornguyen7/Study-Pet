@@ -56,7 +56,7 @@ The pet is an always-on-top character whose eyes always show whether it is watch
 | P-1 | The pet lives in a transparent, always-on-top window. The user can drag it anywhere and hide it with one shortcut. | 1 |
 | P-2 | Eyes are open only while capture is active, and closed in every other state. | 1 |
 | P-3 | Clicking the pet opens a panel: Today list, start session, wrap up day, settings. | 1 |
-| P-4 | The user can type quick commands, such as "start 50 minutes" or "I'm relaxing." Voice comes later. | 2 |
+| P-4 | Optional, for a later build: the user can type quick commands, such as "start 50 minutes" or "I'm relaxing." Voice comes later. Where they are typed and which commands exist is not decided. | Later |
 | S-1 | The user sets focus and break length per session, with saved presets such as 25/5 and 50/10. | 1 |
 | S-2 | A session can be tied to a task from the list, or left untagged. | 2 |
 | S-3 | Breaks pause capture and nudges automatically. | 1 |
@@ -223,14 +223,14 @@ The pet owns one to-do list. Other apps are read-only feeds, and nothing is ever
 - Every imported item keeps a stable source ID, so a re-sync never brings back a checked task.
 - A source edit, such as a new due date, updates the pet's copy and keeps its done status.
 - An item deleted at the source is flagged "removed from Canvas" instead of vanishing.
-- If the source shows the item complete, the pet checks it off. No current source does: the Canvas feed carries no submission status. So for a Canvas task the pet asks, once at the first break after its due time ("Did you submit it?") and when a focus block tied to it ends ("Finished it?"); a yes checks it off, and it can always be checked off by hand.
+- If the source shows the item complete, the pet checks it off. No current source does: the Canvas feed carries no submission status. So for a Canvas task the pet asks, once after its due time and never during a focus block ("Did you submit it?") and when a focus block tied to it ends ("Finished it?"); a yes checks it off, and it can always be checked off by hand.
 - Duplicates merge on course, fuzzy title and due date. The merged task shows a badge per source.
 - The user chooses which calendars, courses, lists or tags to import.
 
 **Reminders**
 
 - Timed by due date against the estimate, not by fixed alarms.
-- Held until the next break, unless the task is due within 2 hours.
+- Held until the next break, unless the task is due within 2 hours. (Built so far: a reminder waits for a running focus block to end; the 2-hour exception and the queue for the break are not built.)
 - A morning brief lists classes, what is due soon and suggested study blocks in calendar gaps.
 - Over time, the pet compares estimates with actual time per kind of task.
 
