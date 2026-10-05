@@ -181,13 +181,19 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 ### Both sources are private ICS addresses; Google OAuth is deferred
 - **Why:** Canvas ("Calendar Feed") and Google Calendar ("Secret address in iCal format") both hand out a private HTTPS address that returns an ICS file. One fetcher and one parser cover both, with no Google Cloud project, consent screen or token refresh.
 - **Gave up:** the spec lists Google as "OAuth, read-only". A school Google Workspace can turn the secret address off, and then this route does not work at all. The Google path has only been run against a made-up feed (`backend/tests/google.ics`), never a real calendar.
-- **Revisit when:** a real account has no secret address, or the app is shared with other people.
+- **Revisit when:** a real account has no secret address, or the app is shared with other people. (It was revisited on 2026-10-05: see the next entry.)
+
+### Google sign-in sits beside the address and the file; the token is in the Keychain through `security`
+- **Why:** the school account has no secret address and an uploaded file goes stale. A throwaway script showed the school allows read-only access. An account is a third way to connect the Google source, so the fetcher, `sync_feed` and the schedule list are unchanged; events are keyed `iCalUID@start` on both routes, so switching updates them in place. The refresh token goes in the macOS Keychain (PR-4) by way of the `security` tool that ships with macOS, written on its standard input so it never shows in `ps`. Full design: `google_calendar_oauth.md`.
+- **Rejected:** a Rust keychain library; the app is unsigned, so macOS would ask for the login password after every rebuild and reinstall. The `setting` table; plain text on disk. Reading from the macOS Calendar app; the user wanted Google directly. An OAuth library; the standard library covers the flow.
+- **Gave up:** any program running as the user can ask `security` for the token. macOS only. The Cloud project and its client file are set up by hand, and the client file is copied in once per app. Primary calendar only.
+- **Revisit when:** the app is signed (use a keychain library then), the app is shared with other people (the client must ship with it), or another calendar is wanted.
 
 ### A calendar with no address can be uploaded as an .ics file
 - **Why:** the first real Google account had no secret address to copy. Google Calendar can still export an .ics file, so each feed in Settings has an "Upload .ics" button. The panel reads the file and Rust stores its text in the `setting` table in place of an address (`save_feed_file`, `lib.rs:571`). Every sync hands that text to the fetcher again, which parses it with no download, so repeating events keep rolling into the 30-day window.
 - **Rejected:** parsing the file once at upload and keeping only the events; repeats past the first 30 days would never appear.
 - **Gave up:** a file is a snapshot. New or changed events do not arrive until the user exports and uploads again, and nothing warns that a file is old. The whole file, with every event's description and guest list, sits in `pet.db` as plain text, up to 5 MB. Google's export is a .zip, which the user has to unzip first.
-- **Revisit when:** uploading by hand gets tiresome; that is the point to build OAuth.
+- **Revisit when:** uploading by hand gets tiresome; that is the point to build OAuth. (Built 2026-10-05.)
 
 ### Feeds are parsed with `icalendar` and `recurring-ical-events`
 - **Why:** Canvas alone needed about 60 lines of standard library, but a Google feed has time zones, repeating events and left-out dates, which are not worth writing by hand. One library-based parser for both sources replaced the hand-written one (`backend/feeds.py`).
@@ -222,7 +228,13 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 ### A task already past due when first seen is not imported
 - **Why:** the feed does not say whether an assignment was handed in. The first real import had 102 assignments, 48 of them already past; importing those would have filled Today with "was due" rows for finished work. A task imported while still upcoming stays on the list after its date passes.
 - **Gave up:** an assignment that was genuinely missed before the feed was connected never appears.
-- **Revisit when:** a Canvas API token is added; it gives the submission status.
+- **Revisit when:** a missed assignment from before the connection goes unnoticed. (A Canvas API token would have settled this; that route is closed, see the next entry.)
+
+### No Canvas API token; the pet asks whether work was submitted
+- **Why:** decided 2026-10-05. The school does not let students create a Canvas API token, and the calendar feed carries no submission status, so the pet cannot know an assignment was handed in. Checking off by hand already works and a sync keeps the done status. To make that nearly free, the pet asks once at the first break after a Canvas task's due time ("Did you submit it?") and when a focus block tied to a task ends ("Finished it?"). Both ride on roadmap tasks that were already planned (reminders at breaks, tying a session to a task), so nothing new is built for this alone.
+- **Rejected:** scraping Canvas with the browser's login; fragile, and it means holding a session that can do anything the student can. Hiding a task a few days after its due date; it could hide work that was never done.
+- **Gave up:** real submission status. A task the user never answers about stays overdue until checked off or deleted.
+- **Revisit when:** the school allows tokens, or overdue Canvas tasks pile up in Today.
 
 ### A task missing from the feed is flagged only if it is not yet past
 - **Why:** the spec wants "removed from Canvas" instead of vanishing, so `removed_at` is set on the source link, the panel shows "removed from Canvas", and the flag clears if the item returns. A feed may also drop old items on its own, and those must not look removed.

@@ -212,7 +212,7 @@ The pet owns one to-do list. Other apps are read-only feeds, and nothing is ever
 | Source | How it is read | Phase |
 | --- | --- | --- |
 | The pet's own tasks | Native | 2 |
-| Canvas | Calendar feed (ICS) first; an API token later for submission status | 2 |
+| Canvas | Calendar feed (ICS). No API token: the school does not give students one, so submission status is not read; the pet asks instead (see the sync rules) | 2 |
 | Google Calendar or Outlook | OAuth, read-only. Until that is built: the calendar's secret iCal address, or an exported .ics file uploaded by hand | 2 |
 | Obsidian | Local markdown files | 6 |
 | Notion, Todoist, Apple Reminders | Read-only API | 6 |
@@ -223,7 +223,7 @@ The pet owns one to-do list. Other apps are read-only feeds, and nothing is ever
 - Every imported item keeps a stable source ID, so a re-sync never brings back a checked task.
 - A source edit, such as a new due date, updates the pet's copy and keeps its done status.
 - An item deleted at the source is flagged "removed from Canvas" instead of vanishing.
-- If the source shows the item complete, such as a Canvas submission, the pet checks it off.
+- If the source shows the item complete, the pet checks it off. No current source does: the Canvas feed carries no submission status. So for a Canvas task the pet asks, once at the first break after its due time ("Did you submit it?") and when a focus block tied to it ends ("Finished it?"); a yes checks it off, and it can always be checked off by hand.
 - Duplicates merge on course, fuzzy title and due date. The merged task shows a badge per source.
 - The user chooses which calendars, courses, lists or tags to import.
 
@@ -387,5 +387,5 @@ Six decisions are still open. The biggest risk is a noisy graph, which is why it
 | It feels like surveillance | The user turns it off | Visible eyes, ask-first tiers, a full data panel |
 | CPU or battery drain | The pet gets closed on battery | Rules in real time; the model only at wrap-up |
 | OS permission friction | Setup is abandoned | Plain onboarding for each permission |
-| School disables Canvas tokens | No submission status | The ICS feed is the baseline |
+| School disables Canvas tokens (it has, as of 2026-10-05) | No submission status | The ICS feed is the baseline; the pet asks whether work was submitted |
 | Scope creep | It never ships | Phases with gates; each phase ships something usable |

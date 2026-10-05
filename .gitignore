@@ -33,3 +33,9 @@ pet.db*
 # secrets
 .env
 .env.*
+
+# throwaway spikes; may hold OAuth client files
+spike/
+
+# the Google OAuth client for the dev app (docs/google_calendar_oauth.md)
+google_client.json

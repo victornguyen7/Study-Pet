@@ -31,6 +31,7 @@ type Feed = {
   source: Source;
   set: boolean;
   file: boolean; // set from an uploaded .ics file rather than an address
+  account: boolean; // set by signing in (Google only)
   status: { at: string; error?: string; tasks?: number; events?: number } | null;
 };
 // Mirrors events_today() in src-tauri/src/lib.rs
@@ -221,7 +222,7 @@ function feedStatus(f: Feed) {
   if (!f.status) return "Not synced yet.";
   if (f.status.error) return `Last sync failed at ${clock(f.status.at)}: ${f.status.error}.`;
   const counts = [f.status.tasks && plural(f.status.tasks, "assignment"), plural(f.status.events ?? 0, "event")];
-  return `${f.file ? "Read from your file" : "Synced"} at ${clock(f.status.at)}: ${counts.filter(Boolean).join(", ")}.`;
+  return `${f.account ? "Signed in. Synced" : f.file ? "Read from your file" : "Synced"} at ${clock(f.status.at)}: ${counts.filter(Boolean).join(", ")}.`;
 }
 
 async function loadFeeds() {
@@ -236,11 +237,13 @@ async function loadFeeds() {
       input.type = "password"; // the address is a secret, so it is never shown back
       input.required = true;
       input.autocomplete = "off";
-      input.placeholder = f.file
-        ? "Using your file. Paste an address to replace it"
-        : f.set
-          ? "Saved. Paste a new address to replace it"
-          : "Paste the feed address";
+      input.placeholder = f.account
+        ? "Signed in. Paste an address to replace it"
+        : f.file
+          ? "Using your file. Paste an address to replace it"
+          : f.set
+            ? "Saved. Paste a new address to replace it"
+            : "Paste the feed address";
       input.setAttribute("aria-label", `${name} feed address`);
       const status = el("p", feedStatus(f), f.status?.error ? "late" : "muted");
       const save = (command: string, args: object) => {
@@ -269,6 +272,16 @@ async function loadFeeds() {
       upload.onclick = () => picker.click();
       const row = el("div", "", "row");
       row.append(input, el("button", "Save"), upload, picker);
+      if (f.source === "google") {
+        // the fetcher opens the browser and waits for the sign-in to finish there
+        const signIn = el("button", f.account ? "Sign in again" : "Sign in with Google") as HTMLButtonElement;
+        signIn.type = "button";
+        signIn.onclick = () => {
+          status.textContent = "Waiting for the sign-in in your browser…";
+          run(() => invoke("connect_google").finally(loadFeeds));
+        };
+        row.append(signIn);
+      }
       if (f.set) {
         const remove = el("button", "Disconnect") as HTMLButtonElement;
         remove.type = "button";

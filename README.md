@@ -9,7 +9,7 @@ Tauri desktop pet. See `docs/spec.md`; Phase 1 (pet, timer, streak) is built and
 - `backend/timer.py`: session timer state machine (focus, break, call back). Rust ticks it once a second, stores finished focus blocks, and broadcasts the state to both windows as a `timer` event.
 - `backend/streaks.py`: streak rules (daily threshold, 2 freezes a month, milestones). Rust feeds it study minutes per day from the `session` table.
 - `backend/tasks.py`: quick-add parser. Turns a typed line such as "STAT 310 HW3 Fri 2h" into a title, course, due date and estimate; Rust stores the result in the `task` table.
-- `backend/fetcher.py`: the task fetcher, the only process on the network. Rust starts it at launch, every half hour and from Settings; it downloads the saved Canvas and Google Calendar feed addresses, parses any uploaded .ics file, and exits.
+- `backend/fetcher.py`: the task fetcher, the only process on the network. Rust starts it at launch, every half hour and from Settings; it downloads the saved Canvas and Google Calendar feed addresses, parses any uploaded .ics file, reads a signed-in Google account's primary calendar, and exits. It also runs the Google sign-in in the browser; the refresh token is kept in the macOS Keychain (`docs/google_calendar_oauth.md`).
 - `backend/feeds.py`: ICS feed parser. Canvas assignments become tasks; everything else becomes calendar events. Rust stores the result with `sync_feed`.
 - `backend/main.py`: Python sidecar, JSON lines over stdin/stdout. Add a function to `METHODS`, call it from the UI with `invoke("backend_call", { method, params })`.
 

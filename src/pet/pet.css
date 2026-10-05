@@ -13,8 +13,6 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding-bottom: 12px;
-  box-sizing: border-box;
 }
 
 #bubble {
@@ -68,7 +66,7 @@ body {
 
 @keyframes nap {
   50% {
-    transform: scale(1.04, 0.96);
+    transform: scale(1, 0.96); /* no widening: the window is exactly as wide as the slime */
   }
 }
 

@@ -76,3 +76,33 @@ def parse_feed(ics, source, start, end):
             }
         )
     return items
+
+
+def google_events(items, source="google"):
+    """Events from Google's Calendar API (events.list with singleEvents) -> the same dicts parse_feed returns.
+
+    The uid is built the way parse_feed builds it, from the event's iCal UID and its start, so an event keeps
+    its identity when a calendar moves from an .ics file to an account.
+    """
+
+    def when(value):  # {"dateTime": "2026-10-05T11:15:00-04:00"} or {"date": "2026-10-05"}
+        return _when(datetime.fromisoformat(value["dateTime"])) if "dateTime" in value else (value["date"], True)
+
+    out = []
+    for item in items:
+        # a cancelled repeat comes with no start
+        if item.get("status") == "cancelled" or "start" not in item or "iCalUID" not in item:
+            continue
+        begin, all_day = when(item["start"])
+        out.append(
+            {
+                "kind": "event",
+                "source": source,
+                "uid": f"{item['iCalUID']}@{begin}",
+                "title": str(item.get("summary", "")).strip() or "(no title)",
+                "start_at": begin,
+                "end_at": when(item["end"])[0] if "end" in item else begin,
+                "all_day": all_day,
+            }
+        )
+    return out

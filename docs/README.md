@@ -39,3 +39,4 @@ Run the last command from the project root.
 - [DECISIONS.md](DECISIONS.md): why it is built this way.
 - [KNOWN_ISSUES.md](KNOWN_ISSUES.md): what is unfinished or fragile, and what it costs.
 - [CHANGELOG.md](CHANGELOG.md): what has been built.
+- [google_calendar_oauth.md](google_calendar_oauth.md): the design for signing in with Google, the spike behind it and the Cloud console steps (approved, not built).

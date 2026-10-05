@@ -65,7 +65,7 @@ flowchart LR
 - **UI to Rust:** `invoke("command_name", args)`. The commands are `timer`, `streak`, `day`, `list_presets`, `add_preset`, `delete_preset`, `set_streak_threshold`, `add_task`, `list_tasks`, `set_task_done`, `delete_task`, `feeds`, `set_feed`, `set_feed_file`, `sync_now`, `list_events`, `toggle_panel` and `backend_call`.
 - **Rust to UI:** `timer` and `streak` events, sent to both windows at once. This is why the pet and the panel always agree. A third event, `tasks`, carries no data: it is sent after each feed sync, and the panel reloads its tasks, schedule and feed status. After its own changes the panel just reloads.
 - **Rust to the sidecar:** one line of JSON in, one line out: `{"method": "timer", "params": {...}}` returns `{"ok": ...}` or `{"error": ...}`.
-- **Rust to the fetcher:** one JSON object in on stdin, `{"feeds": {"canvas": address, ...}, "files": {"google": ics text, ...}}`, and one out, with `{"ok": [items]}` or `{"error": "..."}` for each source. The process then exits.
+- **Rust to the fetcher:** one JSON object in on stdin, `{"feeds": {"canvas": address, ...}, "files": {"google": ics text, ...}, "accounts": {"google": client and refresh token}}` (or `{"connect": {"google": client}}` to sign in), and one out, with `{"ok": [items]}` or `{"error": "..."}` for each source. The process then exits.
 
 ### One example: a focus block, start to finish
 
@@ -195,5 +195,5 @@ By the end there are four processes, split by what each is allowed to do. The fi
 ### Three rules that must always hold
 
 1. **The privacy gate runs first.** A Private window is never captured, rather than captured and then deleted (PR-1).
-2. **Only the task fetcher touches the network.** Captured data never leaves the laptop (PR-6). The fetcher is handed feed addresses and nothing else, and it has no access to the database.
+2. **Only the task fetcher touches the network.** Captured data never leaves the laptop (PR-6). The fetcher is handed feed addresses, uploaded files and, for a signed-in Google account, the client and refresh token, and nothing else; it has no access to the database or the Keychain.
 3. **Real-time work uses rules only.** The model runs once, at wrap-up, so the pet stays light all day.

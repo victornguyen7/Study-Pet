@@ -71,7 +71,7 @@ flowchart TD
 - Typed quick commands, such as "start 50 minutes" (P-4).
 - Reminders timed by due date against the estimate, held until the next break.
 
-**Uses:** new `task`, `task_source_link` and `calendar_event` tables in SQLite, the Canvas calendar feed (ICS), Google Calendar's secret iCal address (OAuth is deferred), the `icalendar`, `recurring-ical-events` and `certifi` packages, a separate task-fetcher process that is the only one with network access (PR-6). Feed addresses are in the `setting` table for now, not the OS keychain (PR-4 is not met; see `KNOWN_ISSUES.md`).
+**Uses:** new `task`, `task_source_link` and `calendar_event` tables in SQLite, the Canvas calendar feed (ICS), Google Calendar's secret iCal address or a read-only sign-in (OAuth, with the refresh token in the macOS Keychain), the `icalendar`, `recurring-ical-events` and `certifi` packages, a separate task-fetcher process that is the only one with network access (PR-6). Feed addresses are in the `setting` table for now, not the OS keychain (PR-4 is not met; see `KNOWN_ISSUES.md`).
 
 **Tasks**
 - [x] Task tables and a migration
@@ -90,17 +90,16 @@ flowchart TD
 - [x] Commit the new pet, icon and docs; the installed app was built from uncommitted files
 - [x] Set the version to 0.2.0 in `package.json`, `Cargo.toml` and both Tauri configs
 - [x] Wake-up splash from the logo design (optional; in `pet.css`, not yet looked at in the real window)
-- [ ] Try the Google import against a real calendar or export (only a made-up feed so far)
-- [ ] Google Calendar by read-only OAuth, so the calendar updates without uploading a file again
+- [x] Try the Google import against a real calendar or export (only a made-up feed so far)
+- [x] Google Calendar by read-only OAuth, so the calendar updates without uploading a file again (primary calendar only; design in `google_calendar_oauth.md`; signed in from the dev app on 2026-10-05, the everyday app gets it when Phase 2 is finished)
 - [ ] Feed addresses in the OS keychain (PR-4)
 - [ ] Merge a typed task with its imported copy
-- [ ] Check off a task when Canvas shows it submitted (needs a Canvas API token)
 - [ ] Let the user choose which courses and calendars to import
-- [ ] Tie a session to a task; show time spent against the estimate
+- [ ] Tie a session to a task; show time spent against the estimate. When a tied focus block ends, the pet asks "Finished it?" and a yes checks the task off
 - [ ] Quick commands
-- [ ] Reminders at breaks and the morning brief
+- [ ] Reminders at breaks and the morning brief. For a Canvas task whose due time has passed, the pet asks once at the next break, "Did you submit it?"; a yes checks it off (this stands in for Canvas submission status, which needs an API token the school does not give out)
 
-**Decided:** `icalendar` with `recurring-ical-events` parses ICS. **To decide:** which library handles OAuth, if it is needed.
+**Decided:** `icalendar` with `recurring-ical-events` parses ICS. OAuth uses no library: the standard library covers the sign-in, and the `security` tool reaches the Keychain.
 
 **Gate:** one week with no other to-do app opened.
 
