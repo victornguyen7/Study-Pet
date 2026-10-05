@@ -71,7 +71,7 @@ flowchart TD
 - Typed quick commands, such as "start 50 minutes" (P-4).
 - Reminders timed by due date against the estimate, held until the next break.
 
-**Uses:** new `task`, `task_source_link` and `calendar_event` tables in SQLite, the Canvas calendar feed (ICS), Google Calendar's secret iCal address or a read-only sign-in (OAuth, with the refresh token in the macOS Keychain), the `icalendar`, `recurring-ical-events` and `certifi` packages, a separate task-fetcher process that is the only one with network access (PR-6). Feed addresses are in the `setting` table for now, not the OS keychain (PR-4 is not met; see `KNOWN_ISSUES.md`).
+**Uses:** new `task`, `task_source_link` and `calendar_event` tables in SQLite, the Canvas calendar feed (ICS), Google Calendar's secret iCal address or a read-only sign-in (OAuth, with the refresh token in the macOS Keychain), the `icalendar`, `recurring-ical-events` and `certifi` packages, a separate task-fetcher process that is the only one with network access (PR-6). Feed addresses and the Google token are in the macOS Keychain; the database itself is not encrypted yet, so PR-4 is only partly met (see `KNOWN_ISSUES.md`).
 
 **Tasks**
 - [x] Task tables and a migration
@@ -92,7 +92,7 @@ flowchart TD
 - [x] Wake-up splash from the logo design (optional; in `pet.css`, not yet looked at in the real window)
 - [x] Try the Google import against a real calendar or export (only a made-up feed so far)
 - [x] Google Calendar by read-only OAuth, so the calendar updates without uploading a file again (primary calendar only; design in `google_calendar_oauth.md`; signed in from the dev app on 2026-10-05, the everyday app gets it when Phase 2 is finished)
-- [ ] Feed addresses in the OS keychain (PR-4)
+- [x] Feed addresses in the OS keychain (PR-4): moved at launch in the dev app; an uploaded .ics file's text is still in the database
 - [ ] Merge a typed task with its imported copy
 - [ ] Let the user choose which courses and calendars to import
 - [ ] Tie a session to a task; show time spent against the estimate. When a tied focus block ends, the pet asks "Finished it?" and a yes checks the task off

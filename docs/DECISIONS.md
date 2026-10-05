@@ -208,10 +208,17 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Why:** python.org's macOS build has no root certificates until the user runs an extra installer, and every HTTPS download failed. Passing `certifi`'s list to `urlopen` works on any Python. Certificate checking is never turned off.
 - **Gave up:** a third pinned package, and its list goes stale if it is never updated.
 
-### Feed addresses are kept as plain text in the `setting` table
+### Feed addresses are kept as plain text in the `setting` table (replaced 2026-10-05, see the next entry)
 - **Why:** the plan was the OS keychain. In a dev build the binary's signature changes on every rebuild, so macOS would ask for the login password on each one, and a release build cannot run Python yet, so the keychain path could not be tested at all. The address sits next to data that is already unencrypted (`feed_urls`, `lib.rs:536`).
 - **Gave up:** PR-4. Anyone who can read `pet.db` can read the calendars. The panel never shows an address back, and error messages are written so they cannot contain one.
 - **Revisit when:** before any release build, together with SQLCipher: move the addresses to the keychain with the `keyring` crate.
+
+### Feed addresses are in the macOS Keychain, through the `security` tool
+- **Why:** PR-4. The Google sign-in had already shown that the `security` tool reaches the Keychain with no password prompt on rebuild, which was the reason the keychain was put off. The same helper now takes a name for each secret (`feed_url_canvas`, `feed_url_google`, `google_refresh_token`) under the app's identifier, so the dev and everyday apps keep their own. The `setting` table holds the marker `keychain` in place of the address, so "is a feed saved" and "a source holds one of address, file or account" still read from the database alone. The secret is written as hex on the tool's standard input: an address has `?` and `&` in it, and hex cannot break the command line or show in `ps`.
+- **Moving old addresses:** at launch, an address still in the table is written to the Keychain, read back, and only then replaced by the marker. If the write fails it stays in the table and still works.
+- **Rejected:** the `keyring` crate; the app is unsigned, so macOS would ask for the login password after every rebuild. Putting an uploaded .ics file there too; it is up to 5 MB and is data, not a credential, so it waits for database encryption.
+- **Gave up:** any program running as the user can ask `security` for an address. macOS only. The Rust test for feed addresses now writes to the real login Keychain under a test name. A database copied to another Mac arrives without its addresses and asks for them to be pasted again.
+- **Revisit when:** the app is signed, or the Windows build starts.
 
 ### A Canvas all-day item is a date, a timed one is a UTC time
 - **Why:** Canvas sends most assignments as a bare date and a few with a time. They map straight onto `due_date` and `due_at`.

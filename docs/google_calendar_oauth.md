@@ -102,7 +102,7 @@ By hand, since the browser step cannot be automated:
 
 - Calendars other than primary. The roadmap has a separate task for choosing calendars.
 - Outlook.
-- Moving the Canvas and Google feed addresses into the Keychain. It stays its own roadmap task and can reuse the same helper.
+- Moving the Canvas and Google feed addresses into the Keychain. (Done afterwards, the same day, with the same helper.)
 - Revoking the token at Google on disconnect.
 - Bundling the client into the app for other users.
 

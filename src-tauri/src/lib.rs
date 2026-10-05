@@ -531,10 +531,37 @@ fn setting(conn: &Connection, key: &str) -> rusqlite::Result<Option<String>> {
     conn.query_row("SELECT value FROM setting WHERE key = ?1", [key], |r| r.get(0)).optional()
 }
 
-// ponytail: feed addresses are secrets kept as plain text in the `setting` table. Spec PR-4 wants the
-// OS keychain: move them (keyring crate) when the database gets SQLCipher, before any release build.
-fn feed_urls(conn: &Connection) -> rusqlite::Result<Vec<(&'static str, String)>> {
-    saved_feeds(conn, "feed_url_")
+/// What the `setting` table holds in place of a feed address: the address itself is in the Keychain (PR-4).
+const IN_KEYCHAIN: &str = "keychain";
+
+/// A source and its feed address, or why the address could not be read.
+type FeedUrl = (&'static str, Result<String, String>);
+
+/// Each saved feed address, read from the Keychain.
+fn feed_urls(conn: &Connection, service: &str) -> Result<Vec<FeedUrl>, String> {
+    let saved = saved_feeds(conn, "feed_url_").map_err(|e| e.to_string())?;
+    Ok(saved
+        .into_iter()
+        .map(|(source, value)| {
+            if value != IN_KEYCHAIN {
+                return (source, Ok(value)); // saved before the Keychain was used, and not moved yet
+            }
+            let url = keychain_get(service, &format!("feed_url_{source}"))
+                .and_then(|url| url.ok_or_else(|| "the address is missing from the Keychain; paste it again".to_string()));
+            (source, url)
+        })
+        .collect())
+}
+
+/// Moves addresses an older build left in the `setting` table into the Keychain. Run at launch.
+/// One that can't be moved stays where it is and still works; the next launch tries again.
+fn move_feed_urls_to_keychain(conn: &Connection, service: &str) -> rusqlite::Result<()> {
+    for (source, url) in saved_feeds(conn, "feed_url_")? {
+        if url != IN_KEYCHAIN && keychain_set(service, &format!("feed_url_{source}"), &url).is_ok() {
+            conn.execute("UPDATE setting SET value = ?2 WHERE key = ?1", (format!("feed_url_{source}"), IN_KEYCHAIN))?;
+        }
+    }
+    Ok(())
 }
 
 /// The .ics files the user uploaded, as text. A source has an address or a file, never both.
@@ -552,8 +579,8 @@ fn saved_feeds(conn: &Connection, prefix: &str) -> rusqlite::Result<Vec<(&'stati
     Ok(saved)
 }
 
-/// Saves a feed address, or forgets the feed when `url` is empty. Imported tasks stay either way.
-fn save_feed_url(conn: &Connection, source: &str, url: &str) -> Result<(), String> {
+/// Saves a feed address in the Keychain, or forgets the feed when `url` is empty. Imported tasks stay either way.
+fn save_feed_url(conn: &Connection, service: &str, source: &str, url: &str) -> Result<(), String> {
     if !SOURCES.contains(&source) {
         return Err(format!("unknown feed {source}"));
     }
@@ -561,7 +588,13 @@ fn save_feed_url(conn: &Connection, source: &str, url: &str) -> Result<(), Strin
     if !(url.is_empty() || lower.starts_with("https://") || lower.starts_with("webcal://")) {
         return Err("a feed address must start with https://".into());
     }
-    replace_feed(conn, source, "feed_url_", url).map_err(|e| e.to_string())
+    let account = format!("feed_url_{source}");
+    if url.is_empty() {
+        keychain_delete(service, &account);
+        return replace_feed(conn, source, "feed_url_", "").map_err(|e| e.to_string());
+    }
+    keychain_set(service, &account, url)?;
+    replace_feed(conn, source, "feed_url_", IN_KEYCHAIN).map_err(|e| e.to_string())
 }
 
 const MAX_ICS_BYTES: usize = 5_000_000;
@@ -618,18 +651,20 @@ fn feed_list(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
 /// Where pet.db lives; google_client.json sits beside it.
 struct DataDir(PathBuf);
 
-const KEYCHAIN_ACCOUNT: &str = "google_refresh_token";
+const GOOGLE_TOKEN: &str = "google_refresh_token";
 
-/// The refresh token lives in the macOS Keychain, reached through the `security` tool that ships with macOS.
+/// Secrets (the Google refresh token, the feed addresses) live in the macOS Keychain, reached through the
+/// `security` tool that ships with macOS. `service` is the app identifier, so the dev and everyday apps
+/// keep their own; `account` names the secret.
 /// Our app is unsigned, so a keychain library would ask for the login password after every rebuild.
-/// ponytail: any program running as the user can ask `security` for the token; sign the app and use a
-/// keychain library to tie it to this app alone.
+/// ponytail: any program running as the user can ask `security` for a secret; sign the app and use a
+/// keychain library to tie them to this app alone.
 fn keychain(args: &[&str]) -> Result<std::process::Output, String> {
     Command::new("security").args(args).output().map_err(|_| "could not reach the Keychain".to_string())
 }
 
-fn keychain_get(service: &str) -> Result<Option<String>, String> {
-    let out = keychain(&["find-generic-password", "-s", service, "-a", KEYCHAIN_ACCOUNT, "-w"])?;
+fn keychain_get(service: &str, account: &str) -> Result<Option<String>, String> {
+    let out = keychain(&["find-generic-password", "-s", service, "-a", account, "-w"])?;
     match out.status.code() {
         Some(0) => Ok(Some(String::from_utf8_lossy(&out.stdout).trim().to_string())),
         Some(44) => Ok(None), // errSecItemNotFound
@@ -637,13 +672,15 @@ fn keychain_get(service: &str) -> Result<Option<String>, String> {
     }
 }
 
-fn keychain_set(service: &str, token: &str) -> Result<(), String> {
-    // the token is written into a command line for `security -i`, so nothing that could end or split it gets through
-    let plain = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "._/~+-=".contains(c));
-    if !plain(token) || !plain(service) {
-        return Err("Google sent a token this app can't store".into());
+fn keychain_set(service: &str, account: &str, secret: &str) -> Result<(), String> {
+    // the names go into a command line for `security -i`, so nothing that could end or split it gets through;
+    // the secret goes in as hex, so it can hold anything (an address has ? and & in it)
+    let plain = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c));
+    if !plain(service) || !plain(account) || secret.is_empty() {
+        return Err("could not reach the Keychain".into());
     }
-    // on stdin, so the token never shows in `ps`
+    let hex: String = secret.bytes().map(|b| format!("{b:02x}")).collect();
+    // on stdin, so the secret never shows in `ps`
     let mut child = Command::new("security")
         .arg("-i")
         .stdin(Stdio::piped())
@@ -651,19 +688,19 @@ fn keychain_set(service: &str, token: &str) -> Result<(), String> {
         .stderr(Stdio::null())
         .spawn()
         .map_err(|_| "could not reach the Keychain".to_string())?;
-    let line = format!("add-generic-password -U -s {service} -a {KEYCHAIN_ACCOUNT} -w {token}\n");
+    let line = format!("add-generic-password -U -s {service} -a {account} -X {hex}\n");
     child.stdin.take().unwrap().write_all(line.as_bytes()).map_err(|_| "could not reach the Keychain".to_string())?;
     child.wait().map_err(|_| "could not reach the Keychain".to_string())?;
-    // `security -i` exits 0 even when a command in it fails, so read the token back
-    if keychain_get(service)?.as_deref() == Some(token) {
+    // `security -i` exits 0 even when a command in it fails, so read the secret back
+    if keychain_get(service, account)?.as_deref() == Some(secret) {
         Ok(())
     } else {
         Err("could not reach the Keychain".into())
     }
 }
 
-fn keychain_delete(service: &str) {
-    let _ = keychain(&["delete-generic-password", "-s", service, "-a", KEYCHAIN_ACCOUNT]);
+fn keychain_delete(service: &str, account: &str) {
+    let _ = keychain(&["delete-generic-password", "-s", service, "-a", account]);
 }
 
 /// The OAuth client from the Cloud console's download: `{ "client_id", "client_secret" }`.
@@ -680,7 +717,7 @@ fn google_client(dir: &Path) -> Result<Value, String> {
 /// What the fetcher needs to read the signed-in account's calendar.
 fn google_account(app: &AppHandle) -> Result<Value, String> {
     let mut account = google_client(&app.state::<DataDir>().0)?;
-    let token = keychain_get(&app.config().identifier)?.ok_or("Google sign-in has expired; sign in again")?;
+    let token = keychain_get(&app.config().identifier, GOOGLE_TOKEN)?.ok_or("Google sign-in has expired; sign in again")?;
     account["refresh_token"] = json!(token);
     Ok(account)
 }
@@ -739,25 +776,46 @@ fn sync_feeds(app: &AppHandle) -> Result<(), String> {
     let (urls, files, signed_in) = {
         let conn = db.0.lock().unwrap();
         (
-            feed_urls(&conn).map_err(|e| e.to_string())?,
+            feed_urls(&conn, &app.config().identifier)?,
             feed_files(&conn).map_err(|e| e.to_string())?,
             setting(&conn, "feed_account_google").map_err(|e| e.to_string())?.is_some(),
         )
     };
-    if !(urls.is_empty() && files.is_empty() && !signed_in) {
-        let object = |saved: &[(&str, String)]| -> Value { saved.iter().map(|(s, v)| (s.to_string(), json!(v))).collect() };
-        // a missing client file or Keychain item is that feed's error; the other feeds still sync
-        let account = signed_in.then(|| google_account(app));
-        let accounts: Value = account.iter().flatten().map(|a| ("google".to_string(), a.clone())).collect();
-        let reply = run_fetcher(&json!({ "feeds": object(&urls), "files": object(&files), "accounts": accounts }));
+    // a feed whose secret can't be read (no Keychain item, no client file) fails by itself; the others still sync
+    let mut failed: Vec<(&str, String)> = Vec::new();
+    let mut feeds = serde_json::Map::new();
+    for (source, url) in urls {
+        match url {
+            Ok(url) => drop(feeds.insert(source.into(), json!(url))),
+            Err(error) => failed.push((source, error)),
+        }
+    }
+    let mut accounts = serde_json::Map::new();
+    if signed_in {
+        match google_account(app) {
+            Ok(account) => drop(accounts.insert("google".into(), account)),
+            Err(error) => failed.push(("google", error)),
+        }
+    }
+    let files: serde_json::Map<String, Value> = files.into_iter().map(|(s, v)| (s.to_string(), json!(v))).collect();
+    let asked: Vec<String> = feeds.keys().chain(files.keys()).chain(accounts.keys()).cloned().collect();
+    if !(asked.is_empty() && failed.is_empty()) {
+        let reply = if asked.is_empty() {
+            Ok(json!({}))
+        } else {
+            run_fetcher(&json!({ "feeds": feeds, "files": files, "accounts": accounts }))
+        };
         let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         let conn = db.0.lock().unwrap();
-        for source in urls.iter().chain(&files).map(|(s, _)| *s).chain(signed_in.then_some("google")) {
-            let status = match (&reply, &account) {
-                (_, Some(Err(error))) if source == "google" => json!({ "at": now, "error": error }),
-                (Ok(reply), _) => store_feed(&conn, source, &reply[source], &now),
-                (Err(error), _) => json!({ "at": now, "error": error }),
+        let mut statuses: Vec<(String, Value)> = failed.into_iter().map(|(s, error)| (s.to_string(), json!({ "at": now, "error": error }))).collect();
+        for source in asked {
+            let status = match &reply {
+                Ok(reply) => store_feed(&conn, &source, &reply[&source], &now),
+                Err(error) => json!({ "at": now, "error": error }),
             };
+            statuses.push((source, status));
+        }
+        for (source, status) in statuses {
             conn.execute(
                 "INSERT OR REPLACE INTO setting (key, value) VALUES (?1, ?2)",
                 (format!("feed_status_{source}"), status.to_string()),
@@ -781,10 +839,10 @@ fn set_feed(app: AppHandle, source: String, url: String) -> Result<(), String> {
         let _one_at_a_time = syncing.0.lock().unwrap();
         let db = app.state::<Db>();
         let conn = db.0.lock().unwrap();
-        save_feed_url(&conn, &source, url.trim())?;
+        save_feed_url(&conn, &app.config().identifier, &source, url.trim())?;
     }
     if source == "google" {
-        keychain_delete(&app.config().identifier); // an address, or none, takes the account's place
+        keychain_delete(&app.config().identifier, GOOGLE_TOKEN); // an address, or none, takes the account's place
     }
     sync_feeds(&app)
 }
@@ -799,8 +857,10 @@ fn set_feed_file(app: AppHandle, source: String, ics: String) -> Result<(), Stri
         let conn = db.0.lock().unwrap();
         save_feed_file(&conn, &source, &ics)?;
     }
+    // the file takes the place of an address or an account, so their secrets go
+    keychain_delete(&app.config().identifier, &format!("feed_url_{source}"));
     if source == "google" {
-        keychain_delete(&app.config().identifier);
+        keychain_delete(&app.config().identifier, GOOGLE_TOKEN);
     }
     sync_feeds(&app)
 }
@@ -814,7 +874,8 @@ fn connect_google(app: AppHandle) -> Result<(), String> {
     let token = reply["google"]["ok"]["refresh_token"]
         .as_str()
         .ok_or_else(|| reply["google"]["error"].as_str().unwrap_or("Sign-in was not completed").to_string())?;
-    keychain_set(&app.config().identifier, token)?;
+    keychain_set(&app.config().identifier, GOOGLE_TOKEN, token)?;
+    keychain_delete(&app.config().identifier, "feed_url_google"); // the account takes the address's place
     {
         let syncing = app.state::<Syncing>();
         let _one_at_a_time = syncing.0.lock().unwrap();
@@ -897,6 +958,7 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let conn = Connection::open(dir.join("pet.db"))?;
             init_db(&conn)?;
+            move_feed_urls_to_keychain(&conn, &app.config().identifier)?;
             app.manage(Db(Mutex::new(conn)));
             app.manage(DataDir(dir));
 
@@ -1133,10 +1195,27 @@ mod tests {
     fn feed_addresses_and_todays_events() {
         let conn = Connection::open_in_memory().unwrap();
         init_db(&conn).unwrap();
-        assert!(save_feed_url(&conn, "canvas", "file:///etc/passwd").is_err());
-        assert!(save_feed_url(&conn, "nope", "https://example.com/a.ics").is_err());
-        save_feed_url(&conn, "google", "https://example.com/secret.ics").unwrap();
-        assert_eq!(feed_urls(&conn).unwrap(), [("google", "https://example.com/secret.ics".to_string())]);
+        // addresses go to the real login Keychain, under a service name only this test uses
+        let kc = "com.hiennguyen.pet.test-feeds";
+        let urls = |conn: &Connection| feed_urls(conn, kc).unwrap();
+        let secret = "https://example.com/secret.ics?user=a&key=b%20c";
+        assert!(save_feed_url(&conn, kc, "canvas", "file:///etc/passwd").is_err());
+        assert!(save_feed_url(&conn, kc, "nope", "https://example.com/a.ics").is_err());
+        save_feed_url(&conn, kc, "google", secret).unwrap();
+        assert_eq!(urls(&conn), [("google", Ok(secret.to_string()))]);
+        // the database holds a marker, never the address
+        assert_eq!(setting(&conn, "feed_url_google").unwrap().as_deref(), Some(IN_KEYCHAIN));
+
+        // an address an older build left in the database still works, and is moved at launch
+        conn.execute("INSERT INTO setting (key, value) VALUES ('feed_url_canvas', 'https://example.com/old.ics')", []).unwrap();
+        assert_eq!(urls(&conn)[0], ("canvas", Ok("https://example.com/old.ics".to_string())));
+        move_feed_urls_to_keychain(&conn, kc).unwrap();
+        assert_eq!(setting(&conn, "feed_url_canvas").unwrap().as_deref(), Some(IN_KEYCHAIN));
+        assert_eq!(urls(&conn)[0], ("canvas", Ok("https://example.com/old.ics".to_string())));
+        // a marker with nothing behind it is that feed's error, not a crash
+        keychain_delete(kc, "feed_url_canvas");
+        assert_eq!(urls(&conn)[0], ("canvas", Err("the address is missing from the Keychain; paste it again".to_string())));
+        save_feed_url(&conn, kc, "canvas", "").unwrap();
         // Settings is told a feed is saved, never its address
         let list = json!(feed_list(&conn).unwrap());
         assert_eq!(
@@ -1150,14 +1229,14 @@ mod tests {
         assert!(save_feed_file(&conn, "google", "  ").is_err());
         assert!(save_feed_file(&conn, "google", &"x".repeat(MAX_ICS_BYTES + 1)).is_err());
         save_feed_file(&conn, "google", "BEGIN:VCALENDAR").unwrap();
-        assert_eq!((feed_urls(&conn).unwrap().len(), feed_files(&conn).unwrap()), (0, vec![("google", "BEGIN:VCALENDAR".to_string())]));
+        assert_eq!((urls(&conn).len(), feed_files(&conn).unwrap()), (0, vec![("google", "BEGIN:VCALENDAR".to_string())]));
         assert_eq!(json!(feed_list(&conn).unwrap())[1], json!({ "source": "google", "set": true, "file": true, "account": false, "status": null }));
         // signing in takes the file's place: a source holds one of address, file or account
         replace_feed(&conn, "google", "feed_account_", "1").unwrap();
         assert_eq!(json!(feed_list(&conn).unwrap())[1], json!({ "source": "google", "set": true, "file": false, "account": true, "status": null }));
-        assert_eq!((feed_urls(&conn).unwrap().len(), feed_files(&conn).unwrap().len()), (0, 0));
-        save_feed_url(&conn, "google", "https://example.com/secret.ics").unwrap();
-        assert_eq!((feed_urls(&conn).unwrap().len(), feed_files(&conn).unwrap().len()), (1, 0));
+        assert_eq!((urls(&conn).len(), feed_files(&conn).unwrap().len()), (0, 0));
+        save_feed_url(&conn, kc, "google", secret).unwrap();
+        assert_eq!((urls(&conn).len(), feed_files(&conn).unwrap().len()), (1, 0));
         assert_eq!(json!(feed_list(&conn).unwrap())[1]["account"], false);
 
         // starts now, so it lands on today whatever the local time is
@@ -1178,12 +1257,13 @@ mod tests {
         assert_eq!(titles, ["holiday", "lecture"]);
 
         // forgetting a feed drops its events
-        save_feed_url(&conn, "google", "").unwrap();
+        save_feed_url(&conn, kc, "google", "").unwrap();
         let events: i64 = conn.query_row("SELECT count(*) FROM calendar_event", [], |r| r.get(0)).unwrap();
-        assert_eq!((feed_urls(&conn).unwrap().len(), events), (0, 0));
+        assert_eq!((urls(&conn).len(), events), (0, 0));
+        assert_eq!(keychain_get(kc, "feed_url_google"), Ok(None)); // and the Keychain item with it
         // disconnecting clears an account too
         replace_feed(&conn, "google", "feed_account_", "1").unwrap();
-        save_feed_url(&conn, "google", "").unwrap();
+        save_feed_url(&conn, kc, "google", "").unwrap();
         assert_eq!(json!(feed_list(&conn).unwrap())[1], json!({ "source": "google", "set": false, "file": false, "account": false, "status": null }));
 
         // an uploaded file goes through the same fetcher, with no download
@@ -1266,18 +1346,25 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn keychain_round_trip_and_client_file() {
         let service = "com.hiennguyen.pet.test";
-        keychain_delete(service);
-        assert_eq!(keychain_get(service), Ok(None));
-        keychain_set(service, "1//0g-Abc_def.123").unwrap();
-        keychain_set(service, "1//second").unwrap(); // a new sign-in replaces the old token
-        assert_eq!(keychain_get(service), Ok(Some("1//second".into())));
-        // nothing that could add a second command to the line
+        let get = || keychain_get(service, GOOGLE_TOKEN);
+        keychain_delete(service, GOOGLE_TOKEN);
+        assert_eq!(get(), Ok(None));
+        keychain_set(service, GOOGLE_TOKEN, "1//0g-Abc_def.123").unwrap();
+        keychain_set(service, GOOGLE_TOKEN, "1//second").unwrap(); // a new sign-in replaces the old token
+        assert_eq!(get(), Ok(Some("1//second".into())));
+        // a secret may hold anything a command line would choke on
+        let awkward = r#"https://x.example/a.ics?b=1&c="d" $HOME;e"#;
+        keychain_set(service, GOOGLE_TOKEN, awkward).unwrap();
+        assert_eq!(get(), Ok(Some(awkward.into())));
+        // a name may not: nothing that could add a second command to the line
         for bad in ["", "a b", "a\nadd-generic-password", "a\"b", "a;b"] {
-            assert!(keychain_set(service, bad).is_err(), "{bad:?}");
+            assert!(keychain_set(service, bad, "x").is_err(), "{bad:?}");
+            assert!(keychain_set(bad, GOOGLE_TOKEN, "x").is_err(), "{bad:?}");
         }
-        assert_eq!(keychain_get(service), Ok(Some("1//second".into())));
-        keychain_delete(service);
-        assert_eq!(keychain_get(service), Ok(None));
+        assert!(keychain_set(service, GOOGLE_TOKEN, "").is_err());
+        assert_eq!(get(), Ok(Some(awkward.into())));
+        keychain_delete(service, GOOGLE_TOKEN);
+        assert_eq!(get(), Ok(None));
 
         let dir = std::env::temp_dir().join("pet-google-client-test");
         std::fs::create_dir_all(&dir).unwrap();

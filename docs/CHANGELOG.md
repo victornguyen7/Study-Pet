@@ -29,6 +29,7 @@
 - Sign in with Google: a "Sign in with Google" button on the Google row in Settings reads the primary calendar through Google's API, so it updates without a new upload. It sits beside the secret address and the uploaded file; a source uses one of the three. The fetcher does the sign-in in the browser (`connect` in `backend/fetcher.py`), the refresh token is kept in the macOS Keychain, and no secret goes in the database. Needs a `google_client.json` beside `pet.db`; see `google_calendar_oauth.md`. New command `connect_google`. Covered by tests against a faked Google, and tried in the dev app against the real school account on 2026-10-05: 193 events, and it synced again after a restart with no new sign-in. The everyday app does not have it yet.
 
 **Changed**
+- Feed addresses are kept in the macOS Keychain, not in `pet.db` (PR-4). The `setting` table holds only a marker. An address saved by an older build is moved at launch; if the move fails it stays where it is and still works. A marker with no Keychain item shows "the address is missing from the Keychain; paste it again" for that feed, and the other feeds still sync. Tried in the dev app on 2026-10-05: the real Canvas address moved and the next sync brought the same 54 assignments.
 - The version number is 0.2.0 in `package.json`, `Cargo.toml` and both Tauri configs (and the two lock files).
 - `backend/feeds.py` reads event times with `event.decoded("DTSTART")` instead of `event["DTSTART"].dt`. Same values; it only stops the editor's type checker from flagging the line.
 - Deleting an imported task hides it, so the next sync does not bring it back (`task.hidden_at`, schema version 3). A typed task is still deleted.
@@ -38,7 +39,7 @@
 - Icon files the Tauri config never referenced: the Windows Store images (`Square*Logo.png`, `StoreLogo.png`) and `icon.png`. All were the stock Tauri logo.
 
 **Not yet**
-- A Today list built each morning with `planned_for`, merging a typed task with its Canvas copy, feed addresses in the keychain, tying a session to a task, reminders.
+- A Today list built each morning with `planned_for`, merging a typed task with its Canvas copy, tying a session to a task, reminders.
 
 ## 0.1.0 · Phase 1, unreleased
 
