@@ -20,6 +20,17 @@ Tauri desktop pet. See `docs/spec.md`; Phase 1 (pet, timer, streak) is built and
     backend/.venv/bin/python -m pip install -r backend/requirements.txt   # once; only the task fetcher needs these
     npm run tauri dev
 
+## Install the everyday app
+
+The everyday app ("Study Pet" in `/Applications`) keeps real data in `~/Library/Application Support/com.hiennguyen.pet/pet.db`, apart from the dev database. Quit it first, then from the project root:
+
+    cp ~/Library/Application\ Support/com.hiennguyen.pet/pet.db ~/Library/Application\ Support/com.hiennguyen.pet/pet.db.bak-$(date +%F)   # skip on a first install
+    npm run tauri build -- --config src-tauri/tauri.daily.conf.json --bundles app
+    rm -rf "/Applications/Study Pet.app" && ditto "src-tauri/target/release/bundle/macos/Study Pet.app" "/Applications/Study Pet.app"
+    open "/Applications/Study Pet.app"
+
+Do it again after any change the everyday app should get. How to go back to a backup is in `docs/KNOWN_ISSUES.md`, item 34.
+
 ## Check
 
     npm run build                   # typecheck + bundle the UI

@@ -17,6 +17,17 @@ The packages are only for the task fetcher, which downloads calendar feeds; the 
 
 To import, open the panel's Settings and paste a feed address under Imports. Canvas: Calendar, then "Calendar Feed". Google Calendar: the calendar's settings, then "Secret address in iCal format". If your calendar has no such address, export it (Settings, "Import & export", Export), unzip it, and use "Upload .ics"; upload again whenever the calendar changes.
 
+## Install the everyday app
+
+`npm run tauri dev` runs a dev copy with its own database. The everyday app, "Study Pet" in `/Applications`, keeps your real history in `~/Library/Application Support/com.hiennguyen.pet/pet.db`. To install or update it, quit it, then from the project root:
+
+    cp ~/Library/Application\ Support/com.hiennguyen.pet/pet.db ~/Library/Application\ Support/com.hiennguyen.pet/pet.db.bak-$(date +%F)
+    npm run tauri build -- --config src-tauri/tauri.daily.conf.json --bundles app
+    rm -rf "/Applications/Study Pet.app" && ditto "src-tauri/target/release/bundle/macos/Study Pet.app" "/Applications/Study Pet.app"
+    open "/Applications/Study Pet.app"
+
+The first line backs up the database; skip it on a first install. Do this again after any change the everyday app should get. To go back to a backup, see [KNOWN_ISSUES.md](KNOWN_ISSUES.md), item 34.
+
 ## Check
 
     npm run build
