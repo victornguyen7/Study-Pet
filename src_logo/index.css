@@ -1,0 +1,10 @@
+@import 'tailwindcss';
+
+@keyframes squish {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.04, 0.96); }
+}
+.checker {
+  background-image: conic-gradient(#1a2652 25%, #22305f 0 50%, #1a2652 0 75%, #22305f 0);
+  background-size: 32px 32px;
+}
