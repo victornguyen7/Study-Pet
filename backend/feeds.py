@@ -46,7 +46,7 @@ def parse_feed(ics, source, start, end):
         if not _is_assignment(event, source) or "DTSTART" not in event:
             continue
         title, course = _title(event, source)
-        due, all_day = _when(event["DTSTART"].dt)
+        due, all_day = _when(event.decoded("DTSTART"))
         items.append(
             {
                 "kind": "task",
@@ -61,8 +61,8 @@ def parse_feed(ics, source, start, end):
     for event in recurring_ical_events.of(calendar).between(start, end):
         if _is_assignment(event, source) or "UID" not in event:
             continue
-        begin, all_day = _when(event["DTSTART"].dt)
-        finish = _when(event["DTEND"].dt)[0] if "DTEND" in event else begin
+        begin, all_day = _when(event.decoded("DTSTART"))
+        finish = _when(event.decoded("DTEND"))[0] if "DTEND" in event else begin
         items.append(
             {
                 "kind": "event",
