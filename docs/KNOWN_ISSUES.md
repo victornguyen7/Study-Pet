@@ -1,7 +1,7 @@
 # Known issues and risks
 
 What is wrong, unfinished or fragile today, and what it will cost if it is left. Highest cost first within each group.
-The reasoning behind each choice is in `DECISIONS.md`. Last reviewed 2026-10-04, when the Canvas and calendar import and the .ics upload were built.
+The reasoning behind each choice is in `DECISIONS.md`. Last reviewed 2026-10-04, when the Canvas and calendar import and the .ics upload were built and the pet got its pixel-slime look.
 
 ## How much of the import has been checked
 
@@ -60,6 +60,23 @@ The reasoning behind each choice is in `DECISIONS.md`. Last reviewed 2026-10-04,
 24. **No automated test covers the panel.** `npm run build` only type-checks it.
 25. **Google's export is a .zip with one .ics per calendar.** The upload takes a single .ics of at most 5 MB, so the user has to unzip it and pick one calendar; a second calendar would need a second source. A large file is also sent to the fetcher and parsed again every half hour.
 26. **All is one flat list.** The first real import put 54 upcoming assignments in it, sorted by due date, with no grouping by course or week and no search.
+
+## The new look and the two builds
+
+30. **The pet pictures are generated, and their source is not in the repository.** `src/pet/closed.svg` and `src/pet/open.svg` were rendered once from a React design file (`App.tsx`, kept outside the project). They are plain lists of colored rectangles and are not practical to edit by hand.
+    *Cost if left:* any change to the look needs that file and a small script to render it again. If the file is lost, the pictures have to be redrawn.
+    *Fix:* keep the design file and a render script under `scripts/` the first time the look changes.
+31. **Three things depend on the exact drawing.** The pet is sized 120 x 80 px for a 24 x 16 grid (`src/pet/pet.css`); the milestone stars are placed at `top: 52px` to land on the dark patch; and the two pictures must share one outline, because the open-eyed one sits under the closed one.
+    *Cost if left:* a redrawn slime with another size or outline shows blurred pixels, stars in the wrong place, or the open eyes peeking out from behind the closed picture.
+32. **The new pet has not been seen in the real pet window, and the reinstalled app has not been opened.** The built page was checked in a headless browser: closed eyes, open eyes with the `watching` class, and one and three stars. The transparent window, the hop on a call back and dragging were not looked at.
+33. **The installed everyday app is a mix of frozen and live code.** It was last built from `tauri.daily.conf.json` on 2026-10-04, from uncommitted work on `phase_2`, and copied to `/Applications`. Its window pages, icon and Rust code are frozen at build time, but it starts Python from this source tree (item 13), so every edit under `backend/` reaches it at once.
+    *Cost if left:* a change to what the sidecar or the fetcher sends or expects, made on a dev branch, breaks the everyday app until it is rebuilt. Moving or renaming the project folder, or deleting `backend/.venv`, stops it starting the timer at all.
+    *Fix:* rebuild and reinstall after any backend change; lasting fix is bundling Python (item 13).
+34. **Rebuilding the everyday app runs new migrations on real data.** Its database is in the OS app data dir and there are no down-migrations. The dev database in the project root is separate (`DECISIONS.md`, "Dev database in the project root").
+    *Cost if left:* a faulty migration reaches the only copy of the real history. Copy `pet.db` from `~/Library/Application Support/com.hiennguyen.pet/` before installing a build with a new schema version. A copy from the 2026-10-04 reinstall is there as `pet.db.bak-2026-10-04`; it can be deleted once the app has been used for a few days.
+35. **Only macOS icon needs are covered.** The Windows Store images and `icon.png` were deleted because no config named them. A Windows Store package, or any config that lists `icons/icon.png`, will fail to build until `npm run tauri icon src-tauri/app-icon.svg` is run again.
+36. **The version number does not match the changelog.** `package.json`, `Cargo.toml`, `tauri.conf.json` and `tauri.daily.conf.json` all say 0.1.0 while the work is listed under 0.2.0. Each has to be changed by hand.
+    *Fix:* remove `"version"` from both Tauri configs so they fall back to `Cargo.toml`, leaving two places.
 
 ## Setup traps
 

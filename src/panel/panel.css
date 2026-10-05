@@ -135,12 +135,17 @@ kbd {
 
 nav {
   display: flex;
+  align-items: center;
   gap: 4px;
   padding: 12px 0;
   position: sticky;
   top: 0;
   background: var(--paper);
   z-index: 2;
+}
+
+nav img {
+  margin-right: 4px;
 }
 
 nav button {

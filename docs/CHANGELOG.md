@@ -21,12 +21,22 @@
 - The panel is larger: 420 × 620, up from 360 × 520.
 - The pet shows on every macOS Space (`visibleOnAllWorkspaces`), so it follows you between desktops.
 - The panel opens on the Space you are on instead of pulling you back to the one it was last on (`move_to_active_space`, macOS only). New macOS-only dependency: `objc2-app-kit`.
+- The pet is a pixel slime: two pictures, eyes closed and eyes open (`src/pet/closed.svg`, `src/pet/open.svg`). It replaces the teal blob drawn in CSS. The eyes still open only during a focus block (P-2), and milestone stars now sit on the dark patch below the eyes.
+- The slime is shown at the left of the panel's view switcher.
+- App icon: the slime on a dark rounded tile, in place of the stock Tauri logo. Its source is `src-tauri/app-icon.svg`.
+- The installed everyday app ("Study Pet" in `/Applications`) was rebuilt from `tauri.daily.conf.json` and reinstalled on 2026-10-04, so it has the new pet and Dock icon. No migration ran; its database was already at schema version 3.
 
 **Changed**
+- `backend/feeds.py` reads event times with `event.decoded("DTSTART")` instead of `event["DTSTART"].dt`. Same values; it only stops the editor's type checker from flagging the line.
 - Deleting an imported task hides it, so the next sync does not bring it back (`task.hidden_at`, schema version 3). A typed task is still deleted.
 - Setup now includes a `pip install` step.
 
+**Removed**
+- Icon files the Tauri config never referenced: the Windows Store images (`Square*Logo.png`, `StoreLogo.png`) and `icon.png`. All were the stock Tauri logo.
+
 **Not yet**
+- The version number is still 0.1.0 in `package.json`, `Cargo.toml` and both Tauri configs.
+- The wake-up splash from the logo design (the slime naps, blinks, then the app opens).
 - A Today list built each morning with `planned_for`, merging a typed task with its Canvas copy, Google by OAuth, feed addresses in the keychain, tying a session to a task, reminders.
 
 ## 0.1.0 · Phase 1, unreleased

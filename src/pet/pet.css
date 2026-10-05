@@ -29,37 +29,30 @@ body {
   text-align: center;
 }
 
+/* the slime is a 24 x 16 pixel grid, drawn at 5px a cell */
 #pet {
   width: 120px;
-  height: 100px;
+  height: 80px;
   border: 0;
-  border-radius: 50% 50% 45% 45%;
-  background: #3993af;
+  /* closed eyes on top; the open-eyed picture sits underneath so it is already loaded for the swap */
+  background: url("./closed.svg"), url("./open.svg");
+  background-size: contain;
   display: flex;
-  gap: 24px;
-  align-items: center;
   justify-content: center;
   cursor: grab;
   position: relative;
 }
 
+/* P-2: eyes open only while a focus block runs */
+#pet.watching {
+  background-image: url("./open.svg");
+}
+
 #pet::after {
   content: attr(data-stars);
   position: absolute;
-  top: 8px;
+  top: 52px; /* on the dark patch below the eyes */
   color: #ffd166;
   font-size: 14px;
   letter-spacing: 2px;
-}
-
-/* closed eye: a flat line */
-.eye {
-  width: 16px;
-  height: 3px;
-  border-radius: 8px;
-  background: #222;
-}
-
-#pet.watching .eye {
-  height: 16px;
 }

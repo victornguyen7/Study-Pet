@@ -93,6 +93,8 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ### Dev database in the project root, release in the OS app data dir
 - **Why:** `pet.db` is easy to inspect during development (`lib.rs:783`). It is in `.gitignore`.
 - **Gave up:** dev and release builds do not share data.
+- **Reviewed 2026-10-04:** sharing one file between the dev build and the installed everyday app was considered and turned down for now. The dev build would run unfinished migrations on real data with no way back, two running timers would count study time twice, and neither app sees the other's writes until it reloads.
+- **Revisit when:** real data is needed while developing. The smallest change is an opt-in `PET_DB` environment variable that overrides the path for one run.
 
 ### Schema changes through `PRAGMA user_version`
 - **Why:** a migration is one `if version < N` block, with no migration library (`lib.rs:70`).
@@ -248,6 +250,19 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 ### Today's schedule is a plain list above the tasks
 - **Why:** the spec asks for events "as a timeline without checkboxes". A list of times and titles, all-day first, is that with no layout code; the section is hidden when there are no events (`events_today`, `lib.rs:727`).
 - **Gave up:** no hour grid, no "now" marker, and a timed event that began yesterday and runs past midnight is not shown.
+
+## Phase 2 · Look
+
+### The pet is two static SVG pictures, swapped by a CSS class
+- **Why:** the design is a 32 x 32 pixel grid worked out by a React component. The app has no React (see "Vite with plain TypeScript"), so the grid was rendered once into `src/pet/closed.svg` and `src/pet/open.svg`. `#pet.watching` picks the open-eyed one, so `src/pet/main.ts` did not change and P-2 works as before.
+- **Rejected:** adding React to draw one picture; drawing the grid in TypeScript at startup (more code that runs on every launch for a picture that never changes).
+- **Gave up:** the pictures cannot be edited as shapes and colors. A new look means generating both files again from the design source, which is not in this repository (`KNOWN_ISSUES.md`, item 30).
+- **Detail:** the open-eyed picture is also loaded as a second background layer under the closed one, so the first swap does not flash. This only works while both pictures have the same outline.
+
+### One picture for the pet, the panel and the app icon
+- **Why:** the panel's view switcher shows `src/pet/closed.svg` itself, so there is no second copy to keep in step. The app icon needs a background tile to sit in the Dock, so it has its own source, `src-tauri/app-icon.svg`, and `npm run tauri icon src-tauri/app-icon.svg` makes the icon files from it.
+- **Gave up:** only the five icon files named in the Tauri configs are kept. The command also writes Windows Store, iOS and Android icons; those were deleted.
+- **Revisit when:** the Windows build starts (run the command again and keep what that platform needs).
 
 ## Phase 2 · Windows
 
