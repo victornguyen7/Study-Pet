@@ -88,8 +88,8 @@ flowchart TD
 - [ ] Look at the new pet in the real window: focus block (eyes open), call back (hop), a milestone star
 - [x] Rebuild and reinstall the everyday app so it gets the new pet and icon (done 2026-10-04; do it again after any change it should get, and back up its `pet.db` first)
 - [ ] Commit the new pet, icon and docs; the installed app was built from uncommitted files
-- [ ] Set the version to 0.2.0 in `package.json`, `Cargo.toml` and both Tauri configs
-- [ ] Wake-up splash from the logo design (optional)
+- [x] Set the version to 0.2.0 in `package.json`, `Cargo.toml` and both Tauri configs
+- [x] Wake-up splash from the logo design (optional; in `pet.css`, not yet looked at in the real window)
 - [ ] Try the Google import against a real calendar or export (only a made-up feed so far)
 - [ ] Google Calendar by read-only OAuth, so the calendar updates without uploading a file again
 - [ ] Feed addresses in the OS keychain (PR-4)

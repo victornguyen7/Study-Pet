@@ -48,6 +48,41 @@ body {
   background-image: url("./open.svg");
 }
 
+/* Wake-up splash, from the logo design: at launch the slime naps, blinks awake, then settles
+   back to closed eyes, since nothing is being captured yet (P-2) */
+@media (prefers-reduced-motion: no-preference) {
+  #pet {
+    transform-origin: bottom;
+    animation: nap 1.2s steps(4) 2;
+  }
+
+  #pet::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url("./open.svg") 0 0 / contain;
+    opacity: 0;
+    animation: wake 2.6s step-end;
+  }
+}
+
+@keyframes nap {
+  50% {
+    transform: scale(1.04, 0.96);
+  }
+}
+
+/* eyes open at 1.1s, shut at 1.5s, open again at 1.65s, shut for good at 2.6s */
+@keyframes wake {
+  42%,
+  63% {
+    opacity: 1;
+  }
+  58% {
+    opacity: 0;
+  }
+}
+
 #pet::after {
   content: attr(data-stars);
   position: absolute;

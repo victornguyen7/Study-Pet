@@ -25,8 +25,10 @@
 - The slime is shown at the left of the panel's view switcher.
 - App icon: the slime on a dark rounded tile, in place of the stock Tauri logo. Its source is `src-tauri/app-icon.svg`.
 - The installed everyday app ("Study Pet" in `/Applications`) was rebuilt from `tauri.daily.conf.json` and reinstalled on 2026-10-04, so it has the new pet and Dock icon. No migration ran; its database was already at schema version 3.
+- Wake-up splash on the pet at launch, from the logo design: the slime naps, blinks awake, then closes its eyes again (`src/pet/pet.css`, CSS only). The eyes are open for about 1.3 s with nothing being captured, a short exception to P-2. Skipped when the system asks for reduced motion. The design's full-screen backdrop and "Study Pet" wordmark are left out; the pet window is a small transparent overlay.
 
 **Changed**
+- The version number is 0.2.0 in `package.json`, `Cargo.toml` and both Tauri configs (and the two lock files).
 - `backend/feeds.py` reads event times with `event.decoded("DTSTART")` instead of `event["DTSTART"].dt`. Same values; it only stops the editor's type checker from flagging the line.
 - Deleting an imported task hides it, so the next sync does not bring it back (`task.hidden_at`, schema version 3). A typed task is still deleted.
 - Setup now includes a `pip install` step.
@@ -35,8 +37,6 @@
 - Icon files the Tauri config never referenced: the Windows Store images (`Square*Logo.png`, `StoreLogo.png`) and `icon.png`. All were the stock Tauri logo.
 
 **Not yet**
-- The version number is still 0.1.0 in `package.json`, `Cargo.toml` and both Tauri configs.
-- The wake-up splash from the logo design (the slime naps, blinks, then the app opens).
 - A Today list built each morning with `planned_for`, merging a typed task with its Canvas copy, Google by OAuth, feed addresses in the keychain, tying a session to a task, reminders.
 
 ## 0.1.0 · Phase 1, unreleased

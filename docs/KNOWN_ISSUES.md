@@ -98,7 +98,7 @@ The reasoning behind each choice is in `DECISIONS.md`. Last reviewed 2026-10-04,
 
     A backup from the 2026-10-04 reinstall exists as `pet.db.bak-2026-10-04`. Old backups can be deleted once the app has run well for a few days.
 35. **Only macOS icon needs are covered.** The Windows Store images and `icon.png` were deleted because no config named them. A Windows Store package, or any config that lists `icons/icon.png`, will fail to build until `npm run tauri icon src-tauri/app-icon.svg` is run again.
-36. **The version number does not match the changelog.** `package.json`, `Cargo.toml`, `tauri.conf.json` and `tauri.daily.conf.json` all say 0.1.0 while the work is listed under 0.2.0. Each has to be changed by hand.
+36. **The version number lives in four places.** `package.json`, `Cargo.toml`, `tauri.conf.json` and `tauri.daily.conf.json` all say 0.2.0 now, matching the changelog, but each has to be changed by hand at the next bump.
     *Fix:* remove `"version"` from both Tauri configs so they fall back to `Cargo.toml`, leaving two places.
 
 ## Setup traps
