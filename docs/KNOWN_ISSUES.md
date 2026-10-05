@@ -72,8 +72,31 @@ The reasoning behind each choice is in `DECISIONS.md`. Last reviewed 2026-10-04,
 33. **The installed everyday app is a mix of frozen and live code.** It was last built from `tauri.daily.conf.json` on 2026-10-04, from uncommitted work on `phase_2`, and copied to `/Applications`. Its window pages, icon and Rust code are frozen at build time, but it starts Python from this source tree (item 13), so every edit under `backend/` reaches it at once.
     *Cost if left:* a change to what the sidecar or the fetcher sends or expects, made on a dev branch, breaks the everyday app until it is rebuilt. Moving or renaming the project folder, or deleting `backend/.venv`, stops it starting the timer at all.
     *Fix:* rebuild and reinstall after any backend change; lasting fix is bundling Python (item 13).
-34. **Rebuilding the everyday app runs new migrations on real data.** Its database is in the OS app data dir and there are no down-migrations. The dev database in the project root is separate (`DECISIONS.md`, "Dev database in the project root").
-    *Cost if left:* a faulty migration reaches the only copy of the real history. Copy `pet.db` from `~/Library/Application Support/com.hiennguyen.pet/` before installing a build with a new schema version. A copy from the 2026-10-04 reinstall is there as `pet.db.bak-2026-10-04`; it can be deleted once the app has been used for a few days.
+34. **Rebuilding the everyday app runs new migrations on real data.** Its database is in the OS app data dir and there are no down-migrations. The dev database in the project root is separate (`DECISIONS.md`, "Dev database in the project root"), so `npm run tauri dev` never touches real data; the risk starts when a new build is installed in `/Applications`.
+    *Cost if left:* a faulty migration reaches the only copy of the real history.
+    *What to do:* back up before every reinstall, in this order.
+
+    1. Quit Study Pet (the everyday app, not the dev one). A focus block in progress is lost when it quits, so finish or stop it first.
+    2. Copy the database to a dated backup beside it:
+
+           cp ~/Library/Application\ Support/com.hiennguyen.pet/pet.db ~/Library/Application\ Support/com.hiennguyen.pet/pet.db.bak-$(date +%F)
+
+    3. Check the copy is there and is not empty:
+
+           ls -l ~/Library/Application\ Support/com.hiennguyen.pet/
+
+    4. Build the everyday app from the project root:
+
+           npm run tauri build -- --config src-tauri/tauri.daily.conf.json --bundles app
+
+    5. Replace the installed app: drag `src-tauri/target/release/bundle/macos/Study Pet.app` into `/Applications` and choose Replace.
+    6. Open it and check that today's focus blocks, the streak and the task list are still there.
+
+    *To go back:* quit the app, then copy the backup over the real file. Use the date of the backup you want. If the new build added a migration, also reinstall the older app, because an older database with a newer app is migrated again on the next launch.
+
+           cp ~/Library/Application\ Support/com.hiennguyen.pet/pet.db.bak-2026-10-04 ~/Library/Application\ Support/com.hiennguyen.pet/pet.db
+
+    A backup from the 2026-10-04 reinstall exists as `pet.db.bak-2026-10-04`. Old backups can be deleted once the app has run well for a few days.
 35. **Only macOS icon needs are covered.** The Windows Store images and `icon.png` were deleted because no config named them. A Windows Store package, or any config that lists `icons/icon.png`, will fail to build until `npm run tauri icon src-tauri/app-icon.svg` is run again.
 36. **The version number does not match the changelog.** `package.json`, `Cargo.toml`, `tauri.conf.json` and `tauri.daily.conf.json` all say 0.1.0 while the work is listed under 0.2.0. Each has to be changed by hand.
     *Fix:* remove `"version"` from both Tauri configs so they fall back to `Cargo.toml`, leaving two places.
