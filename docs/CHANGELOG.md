@@ -40,6 +40,12 @@
 - Deleting an imported task hides it, so the next sync does not bring it back (`task.hidden_at`, schema version 3). A typed task is still deleted.
 - Setup now includes a `pip install` step.
 
+**Fixed**
+- The sync judges "already past" and "still upcoming" on the laptop's day, not the UTC day. In the evening in a US time zone, an assignment due earlier that day was skipped on first import.
+- A stuck download can no longer block every later sync: the fetcher ends itself after 2 minutes (6 for a sign-in), and Settings shows "the task fetcher took too long and was stopped".
+- Today shows a line above the task list when a connected feed has gone a day without a good sync or has never synced. A failed sync now keeps the time of the last good one (`ok_at` in the feed's status).
+- Tasks and today's schedule reload when the day changes while the panel stays open.
+
 **Removed**
 - Icon files the Tauri config never referenced: the Windows Store images (`Square*Logo.png`, `StoreLogo.png`) and `icon.png`. All were the stock Tauri logo.
 

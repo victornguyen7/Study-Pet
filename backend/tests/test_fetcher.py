@@ -1,6 +1,9 @@
 """Run from the project root:  backend/.venv/bin/python -m unittest backend.tests.test_fetcher
 Nothing here touches the network: the download is faked."""
 
+import signal
+import subprocess
+import sys
 import unittest
 import urllib.error
 import urllib.parse
@@ -128,6 +131,17 @@ class GoogleAccountTest(unittest.TestCase):
             (SCOPE, "STATE", "CHALLENGE", "S256", "offline"),
         )
         self.assertNotIn("client_secret", query)
+
+    def test_a_stuck_sync_is_ended_by_the_alarm(self):
+        stuck = (
+            "import io, sys, time, backend.fetcher as f\n"
+            "f.SYNC_SECONDS = 1\n"
+            "f.run = lambda request, now: time.sleep(30)\n"
+            "sys.stdin = io.StringIO('{}')\n"
+            "f.main()"
+        )
+        done = subprocess.run([sys.executable, "-c", stuck], timeout=10)
+        self.assertEqual(done.returncode, -signal.SIGALRM)
 
 
 if __name__ == "__main__":

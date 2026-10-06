@@ -335,6 +335,12 @@ form {
   color: #c2452d;
 }
 
+#stale {
+  color: #c2452d;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
 /* the details sit on the right; the delete button follows them */
 #tasks li > span {
   margin-left: auto;

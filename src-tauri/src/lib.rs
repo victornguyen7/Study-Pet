@@ -657,6 +657,7 @@ enum FeedItem {
 /// A task already imported keeps its row and its done status; only what the source owns is updated.
 /// A task missing from the feed is flagged, not deleted, and the flag clears if it comes back.
 /// A task first seen after its due day is not imported: the feed cannot say whether it was handed in.
+/// Days are compared in the laptop's zone, so an evening sync does not treat today's work as yesterday's.
 fn sync_feed(conn: &Connection, source: &str, items: &[FeedItem], now: &str) -> rusqlite::Result<()> {
     let tx = conn.unchecked_transaction()?;
     // events have no state of their own, so the feed's copy replaces ours
@@ -684,8 +685,12 @@ fn sync_feed(conn: &Connection, source: &str, items: &[FeedItem], now: &str) -> 
                         )?;
                     }
                     None => {
-                        let due_day = due_date.as_deref().or(due_at.as_deref()).and_then(|d| d.get(..10));
-                        if matches!((due_day, now.get(..10)), (Some(due), Some(today)) if due < today) {
+                        let past: bool = tx.query_row(
+                            "SELECT coalesce(coalesce(?1, date(?2, 'localtime')) < date(?3, 'localtime'), 0)",
+                            (due_date, due_at, now),
+                            |r| r.get(0),
+                        )?;
+                        if past {
                             continue;
                         }
                         tx.execute(
@@ -713,7 +718,7 @@ fn sync_feed(conn: &Connection, source: &str, items: &[FeedItem], now: &str) -> 
     tx.execute(
         "UPDATE task_source_link SET removed_at = ?2
          WHERE source = ?1 AND removed_at IS NULL AND last_seen_at < ?2
-           AND task_id IN (SELECT id FROM task WHERE coalesce(due_date, substr(due_at, 1, 10)) >= substr(?2, 1, 10))",
+           AND task_id IN (SELECT id FROM task WHERE coalesce(due_date, date(due_at, 'localtime')) >= date(?2, 'localtime'))",
         (source, now),
     )?;
     tx.commit()
@@ -937,6 +942,10 @@ fn run_fetcher(request: &Value) -> Result<Value, String> {
     // dropping stdin closes it, which is how the fetcher knows the request is complete
     child.stdin.take().unwrap().write_all(request.to_string().as_bytes()).map_err(|e| e.to_string())?;
     let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    if out.status.code().is_none() {
+        // ended by a signal: the alarm backend/fetcher.py sets on itself, so a stuck download can't hold the sync lock
+        return Err("the task fetcher took too long and was stopped".into());
+    }
     if !out.status.success() {
         // the last line of a Python traceback names the error, such as a missing package
         let stderr = String::from_utf8_lossy(&out.stderr);
@@ -963,6 +972,20 @@ fn store_feed(conn: &Connection, source: &str, reply: &Value, now: &str) -> Valu
         "tasks": count("SELECT count(*) FROM task_source_link WHERE source = ?1"),
         "events": count("SELECT count(*) FROM calendar_event WHERE source = ?1"),
     })
+}
+
+/// Saves how a sync went. A failure keeps the time of the last good sync as "ok_at",
+/// so Today can say how old the list is.
+fn save_feed_status(conn: &Connection, source: &str, mut status: Value) -> rusqlite::Result<()> {
+    let key = format!("feed_status_{source}");
+    if status.get("error").is_some() {
+        let before = setting(conn, &key)?.and_then(|s| serde_json::from_str::<Value>(&s).ok());
+        if let Some(before) = before {
+            status["ok_at"] = before[if before.get("error").is_some() { "ok_at" } else { "at" }].clone();
+        }
+    }
+    conn.execute("INSERT OR REPLACE INTO setting (key, value) VALUES (?1, ?2)", (key, status.to_string()))?;
+    Ok(())
 }
 
 /// Downloads every saved feed and stores it, then tells the windows with a "tasks" event.
@@ -1014,11 +1037,7 @@ fn sync_feeds(app: &AppHandle) -> Result<(), String> {
             statuses.push((source, status));
         }
         for (source, status) in statuses {
-            conn.execute(
-                "INSERT OR REPLACE INTO setting (key, value) VALUES (?1, ?2)",
-                (format!("feed_status_{source}"), status.to_string()),
-            )
-            .map_err(|e| e.to_string())?;
+            save_feed_status(&conn, &source, status).map_err(|e| e.to_string())?;
         }
     }
     app.emit("tasks", ()).map_err(|e| e.to_string())
@@ -1374,6 +1393,41 @@ mod tests {
         // another source's feed leaves these alone
         sync_feed(&conn, "google", &[], "2026-10-04T15:00:00Z").unwrap();
         assert_eq!((removed("quiz"), count("calendar_event")), (None, 1));
+    }
+
+    #[test]
+    fn feed_sync_compares_local_days() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        // the first and last minute of the local day, as the UTC stamps a feed and a sync carry;
+        // away from UTC the two fall on different UTC days
+        let at = |time: &str| -> String {
+            conn.query_row("SELECT strftime('%Y-%m-%dT%H:%M:%SZ', date('now', 'localtime') || ?1, 'utc')", [time], |r| r.get(0)).unwrap()
+        };
+        let (morning, night) = (at(" 00:01:00"), at(" 23:59:00"));
+        let feed: Vec<FeedItem> = serde_json::from_value(json!([
+            { "kind": "task", "source": "canvas", "uid": "today", "title": "Due this morning", "course": null, "due_at": morning, "due_date": null }
+        ]))
+        .unwrap();
+        // due earlier today: still imported in the evening
+        sync_feed(&conn, "canvas", &feed, &night).unwrap();
+        assert_eq!(tasks(&conn).unwrap().len(), 1);
+        // and flagged when it leaves the feed that same day
+        sync_feed(&conn, "canvas", &[], &at(" 23:59:30")).unwrap();
+        assert!(tasks(&conn).unwrap()[0].removed);
+    }
+
+    #[test]
+    fn failed_sync_keeps_the_last_good_time() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        let status = || json!(feed_list(&conn).unwrap())[0]["status"].clone();
+        save_feed_status(&conn, "canvas", json!({ "at": "T0", "error": "offline" })).unwrap();
+        assert_eq!(status().get("ok_at"), None); // never synced
+        save_feed_status(&conn, "canvas", json!({ "at": "T1", "tasks": 1, "events": 0 })).unwrap();
+        save_feed_status(&conn, "canvas", json!({ "at": "T2", "error": "offline" })).unwrap();
+        save_feed_status(&conn, "canvas", json!({ "at": "T3", "error": "offline" })).unwrap();
+        assert_eq!(status(), json!({ "at": "T3", "error": "offline", "ok_at": "T1" }));
     }
 
     #[test]

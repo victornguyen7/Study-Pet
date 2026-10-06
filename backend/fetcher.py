@@ -17,6 +17,7 @@ import base64
 import hashlib
 import http.server
 import secrets
+import signal
 import urllib.parse
 import webbrowser
 
@@ -81,6 +82,7 @@ TOKEN_URI = "https://oauth2.googleapis.com/token"
 EVENTS_URI = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 SIGN_IN_SECONDS = 300
+SYNC_SECONDS = 120  # a whole sync; each network operation has its own 20 s
 
 
 def call(url, data=None, token=None):
@@ -189,5 +191,14 @@ def run(request, now, download=download, call=call):
     return out
 
 
+def main():
+    request = json.load(sys.stdin)
+    # The app waits on this process while holding its sync lock, so it must end. The alarm's default action
+    # kills the process even when it is stuck outside Python, such as on a server that sends a byte at a time.
+    # ponytail: Unix only, like the Keychain calls in lib.rs
+    signal.alarm(SIGN_IN_SECONDS + 60 if "connect" in request else SYNC_SECONDS)
+    json.dump(run(request, datetime.now(timezone.utc)), sys.stdout)
+
+
 if __name__ == "__main__":
-    json.dump(run(json.load(sys.stdin), datetime.now(timezone.utc)), sys.stdout)
+    main()

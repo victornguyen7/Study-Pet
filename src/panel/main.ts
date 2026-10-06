@@ -38,7 +38,8 @@ type Feed = {
   set: boolean;
   file: boolean; // set from an uploaded .ics file rather than an address
   account: boolean; // set by signing in (Google only)
-  status: { at: string; error?: string; tasks?: number; events?: number } | null;
+  // ok_at: the last good sync, kept while syncs fail
+  status: { at: string; error?: string; ok_at?: string | null; tasks?: number; events?: number } | null;
 };
 // Mirrors events_today() in src-tauri/src/lib.rs
 type CalendarEvent = { title: string; start_at: string; end_at: string; all_day: boolean };
@@ -282,6 +283,20 @@ function feedStatus(f: Feed) {
   return `${f.account ? "Signed in. Synced" : f.file ? "Read from your file" : "Synced"} at ${clock(f.status.at)}: ${counts.filter(Boolean).join(", ")}.`;
 }
 
+/** Today says so when a connected feed has gone a day without a good sync; the reason is in Settings. */
+async function loadStale() {
+  const lines = (await invoke<Feed[]>("feeds")).flatMap((f) => {
+    if (!f.set || !f.status) return [];
+    const ok = f.status.error ? f.status.ok_at : f.status.at;
+    if (!ok) return [`${sourceNames[f.source]} has never synced.`];
+    if (Date.now() - Date.parse(ok) < 24 * 60 * 60 * 1000) return [];
+    const when = new Date(ok).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+    return [`${sourceNames[f.source]} has not synced since ${when}.`];
+  });
+  $("stale").hidden = !lines.length;
+  $("stale").textContent = lines.length ? `${lines.join(" ")} This list may be out of date; see Settings.` : "";
+}
+
 async function loadFeeds() {
   // a sync can finish while an address is being typed; redrawing would wipe it
   if ($("feeds").querySelector<HTMLInputElement>("input[type=password]:focus, input[type=password]:not(:placeholder-shown)")) return;
@@ -458,8 +473,9 @@ async function loadDay(streak: StreakState) {
 
 run(loadPresets);
 // Rust sends "tasks" after every feed sync, whether it ran on the half hour or from Settings
-const loadImports = () => Promise.all([loadTasks(), loadEvents(), loadFeeds(), loadCourses()]);
+const loadImports = () => Promise.all([loadTasks(), loadEvents(), loadFeeds(), loadStale(), loadCourses()]);
 run(loadImports);
+let shownDay = new Date().toDateString();
 run(() => listen("tasks", () => run(loadImports)));
 run(() =>
   onTimer((s) => {
@@ -491,5 +507,11 @@ run(() =>
   onStreak((s) => {
     if (document.activeElement !== threshold) threshold.value = String(s.threshold);
     run(() => loadDay(s));
+    // the streak arrives once a minute; the first one of a new day redraws what "today" means
+    const day = new Date().toDateString();
+    if (day !== shownDay) {
+      shownDay = day;
+      run(loadImports);
+    }
   }),
 );
