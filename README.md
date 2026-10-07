@@ -20,7 +20,7 @@ Tauri desktop pet. See `docs/spec.md`; Phase 1 (pet, timer, streak) is built and
     backend/.venv/bin/python -m pip install -r backend/requirements.txt   # once; only the task fetcher needs these
     npm run tauri dev
 
-To record pages from Chrome, start the app once (it tells Chrome where to find it), then open `chrome://extensions`, turn on "Developer mode", choose "Load unpacked" and pick the `extension/` folder. The pet asks on every page, when it loads or when you switch to it, and remembers no answers; a yes or no covers that page until the tab goes somewhere else.
+To record pages from Chrome, start the app once (it tells Chrome where to find it), then open `chrome://extensions`, turn on "Developer mode", choose "Load unpacked" and pick the `extension/` folder. The pet asks once per site and remembers the answer; a yes or no covers every page on that site. To see every site you have answered, click the Study Pet button in Chrome's toolbar: each one has a Yes/No switch and a Forget button, which makes the pet ask again. After pulling a new version of `extension/`, press its reload button on `chrome://extensions`.
 
 ## Check
 

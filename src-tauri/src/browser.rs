@@ -13,7 +13,7 @@ use crate::db::{lock, Db};
 
 // ---- Pages from the Chrome extension (C-1): address, title and time, for pages the user allowed ----
 //
-// The extension (extension/) asks on every page opened and sends a sample every 5 s for an allowed
+// The extension (extension/) asks once per site and sends a sample every 5 s for an allowed
 // page in front. Chrome starts a native-messaging host for it; that host is a two-line script that
 // hands the bytes to the socket below, so nothing is recorded unless this app is running.
 

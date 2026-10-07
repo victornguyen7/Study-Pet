@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Study Pet",
-  "version": "0.1.0",
-  "description": "Tells the Study Pet app which page is in front, for pages you allow. It asks on every page you open.",
+  "version": "0.2.0",
+  "description": "Tells the Study Pet app which page is in front, for pages you allow. It asks once per site and remembers your answer.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtRo8/ZE6goFDdjGWqadkZlS/VPsHLzvbFf2sQhrAD4NdqlNOTDLDdO9ZlqjM2oU9VSP6WRcKe5nZUGK5zh28a0Twi2MJITJP90lgW4W+oth2r/QnwaQIzLqWRFtG7qRpZjUyX+9hTG5TRatRjRJm30ykwJYM5/TTZj8FVJo0xFx4KdFjiIDA8dVJOJzJt5YK+YWdL73Smr7quJ7xDlsdt+uTSr+vWDX6FPVv4Pp+jlXp18el1TRtJ/zBT7i7KIXSjEw3qD3YEVKAxi0Lh5U5LzuKWyubobL/Vy23AdgOebnktyFzY6bpr4OWYfj9uoR7zUKm0DZzgJ1lD1LCwUl0QwIDAQAB",
   "icons": { "128": "icon.png" },
   "permissions": ["tabs", "storage", "nativeMessaging", "alarms", "scripting"],

@@ -2,6 +2,9 @@
 
 ## Unreleased · Phase 3
 
+**Changed**
+- The Chrome extension (now 0.2.0) asks once per site and remembers the answer, where it asked on every page. Answers are kept in Chrome's storage by site; the popup lists every answered site, where each can be switched between yes and no or forgotten.
+
 **Added**
 - Chrome extension in `extension/` (load it unpacked): on every page opened it asks "can I look at this page?", and for an allowed page in front sends its address and title to the app every 5 seconds. No answer is remembered: a yes covers that page in that tab until the tab goes somewhere else. Its popup says whether the app is connected.
 - The app receives pages by native messaging (`browser.rs`): a Unix socket `ext.sock` and a host script `chrome-host.sh` beside `pet.db`, and a host manifest written into Chrome's folder at launch. Nothing is recorded while the app is closed or during a break.

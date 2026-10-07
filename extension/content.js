@@ -1,4 +1,4 @@
-// Asks, on every page opened, whether the pet may note the time spent here. It reads nothing from the page.
+// Asks, once per site, whether the pet may note the time spent here. It reads nothing from the page.
 // It can arrive twice (at load, and put in by background.js), so the second copy does nothing.
 if (!globalThis.studyPetAsks) {
   globalThis.studyPetAsks = true;
@@ -26,11 +26,11 @@ if (!globalThis.studyPetAsks) {
     const dialog = el("div");
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-label", "Study Pet");
-    const question = el("p", "Study Pet: can I look at this page on ");
+    const question = el("p", "Study Pet: can I look at pages on ");
     question.append(
       el("strong", location.hostname),
       "?",
-      el("small", "I keep the page's address, its title and the time you spend. Nothing else, and never during a break."),
+      el("small", "I keep each page's address, its title and the time you spend. Nothing else, and never during a break. I ask once and remember; see and change your answers from the Study Pet button in the toolbar."),
     );
     const button = (text, allow) => {
       const b = el("button", text);
@@ -53,6 +53,7 @@ if (!globalThis.studyPetAsks) {
     // the page changed its address without loading again, or its tab came to the front
     chrome.runtime.onMessage.addListener((message) => {
       if (message.type === "ask") ask();
+      if (message.type === "answered") box?.remove(); // answered in another tab on this site
     });
   }
 }
