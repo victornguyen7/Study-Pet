@@ -10,11 +10,11 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 **Before the Phase 2 gate week**
 - Items 7, 9, 15 and 17 were fixed on 2026-10-06. The stale-sync line in Today and the midnight reload have not been seen in the real window.
 - Items 41, 45 and 46: click through the task start button, "Finished it?", the reminder bubble and "Did you submit it?" in the real window.
-- Item 1: delete the three old backups after a few good days (the last reinstall was 2026-10-05) and take the address out of `.env`.
+- Item 1: delete the three oldest backups after a few good days (the last reinstall was 2026-10-07) and take the address out of `.env`.
 
 **Before Phase 3 (window monitor, drift ladder)**
 - Item 23 was done on 2026-10-07: `lib.rs` is split into modules. Run the app once to confirm nothing changed.
-- Item 22: more threads will hold the locks.
+- Item 22 was fixed on 2026-10-07.
 - Items 40, 42, 43 and 46: the drift ladder needs a bubble that can be clicked; fix these with it.
 - No content security policy, and the fixed hide shortcut (see "Older items"): the browser extension and the look-away shortcut make both matter.
 
@@ -35,7 +35,7 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 
 | Part | Checked how |
 | --- | --- |
-| Parser, fetcher, storage rules, file upload path | Automated tests (45 Python, 14 Rust, counting the later features) |
+| Parser, fetcher, storage rules, file upload path | Automated tests (53 Python, 16 Rust, counting the later features) |
 | Real Canvas feed, end to end into a throwaway database | Run by hand on 2026-10-04: 102 assignments in the feed, 54 imported, 48 skipped as already past, a second sync added nothing |
 | App starts and migrates the database | Launched once; no errors |
 | Imports section in Settings (address, "Upload .ics", disconnect), schedule list, "removed from Canvas" note | **Not clicked through.** They compile and the commands behind them are tested, but nobody has looked at them on screen |
@@ -44,13 +44,12 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 
 ## Security and privacy
 
-1. **Old plain-text copies of the Canvas feed address remain.** New saves go to the macOS Keychain and the dev app's address was moved there on 2026-10-05, and the everyday app's on its 2026-10-05 reinstall, but the address is still readable in two places: the everyday app's three backups (`pet.db.bak-2026-10-04`, `-05` and `-05-1623`) and `.env` (used by one ignored test). All of these were still there on 2026-10-06. Any program running as the user can also ask the `security` tool for a Keychain item; the Keychain protects the file on disk, not against other software in the session.
+1. **Old plain-text copies of the Canvas feed address remain.** New saves go to the macOS Keychain and the dev app's address was moved there on 2026-10-05, and the everyday app's on its 2026-10-05 reinstall, but the address is still readable in two places: the everyday app's three oldest backups (`pet.db.bak-2026-10-04`, `-05` and `-05-1623`) and `.env` (used by one ignored test). All of these were still there on 2026-10-07. Any program running as the user can also ask the `security` tool for a Keychain item; the Keychain protects the file on disk, not against other software in the session.
    *Cost if left:* a leaked backup or a shared laptop leaks every course and assignment.
    *Fix:* delete the old backups once the reinstalled app has run well for a few days, and remove the address from `.env` when the test is not needed. To make an exposed address useless, reset the feed in Canvas (or Google) and paste the new one. Tying Keychain items to this app alone needs a signed app and a keychain library.
 2. **An uploaded calendar file is stored whole, as plain text.** Its text is kept in the `setting` table so it can be parsed again on each sync. That includes every event's description, location and guest e-mail addresses, for the calendar's whole history, not just the 30 days the app shows.
    *Cost if left:* the same exposure as item 1, with more in it. Disconnecting the feed deletes the stored file.
-3. **A fetcher crash shows the last line of Python's error in Settings.** The normal error messages are written so they cannot contain an address, and a test checks this. A crash outside those paths is passed through unfiltered.
-   *Cost if left:* low; no known crash prints an address.
+3. **Fixed 2026-10-07: a fetcher crash showed the last line of Python's error in Settings, and failed every feed.** A crash while reading one source is now that source's own error and shows only the kind of error ("the task fetcher failed: KeyError"); the other feeds still sync. What is left: a crash before any source is read, such as a missing package, still shows Python's last line.
 
 ## Things that will show wrong data
 
@@ -80,7 +79,7 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 19. **Hidden tasks cannot be brought back and are never cleaned up.** Deleting an imported task sets `hidden_at`; there is no screen for hidden tasks. Done and hidden rows stay in the database for good.
 20. **Event rows are not stable.** Every sync deletes and re-inserts a source's events, and only yesterday to 30 days ahead is kept. Anything that needs to point at an event (a reminder, a session) has to store the feed's own id and start time, or the storage has to change first.
 21. **Disconnecting a feed leaves its tasks behind.** They stay on the list with their source link, stop updating, and are never flagged as removed.
-22. **A panic while a lock is held breaks the app until restart.** The database and the sync lock are taken with `.lock().unwrap()` (24 places on 2026-10-06); if any code panics while holding one, every later call panics too. This was already true of the database lock; the sync lock adds a second one.
+22. **Fixed 2026-10-07: a panic while a lock was held broke the app until restart.** Every lock was taken with `.lock().unwrap()` (38 places), so one panic made every later call panic too, and Phase 3 added three kinds of thread that take the database lock. The database and sync locks now go through `lock` in `db.rs`, which carries on after a panic; the sidecar's lock does the same and starts a fresh Python process, so a focus block in progress at that moment is lost. A panic still ends the thread it happens in: one in the once-a-second timer thread stops the timer until restart.
 23. **Fixed 2026-10-07: `lib.rs` was one file of 1,810 lines.** It is now eight files (`DECISIONS.md`, "The Rust core is eight files"), and `DECISIONS.md` no longer quotes line numbers. What is left: the tests are still one module of about 490 lines in `lib.rs`, and the split app has been compiled and tested but not yet run.
 24. **No automated test covers the panel.** `npm run build` only type-checks it.
 25. **Google's export is a .zip with one .ics per calendar.** The upload takes a single .ics of at most 5 MB, so the user has to unzip it and pick one calendar; a second calendar would need a second source. A large file is also sent to the fetcher and parsed again every half hour.
@@ -104,7 +103,7 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 31. **Four things depend on the exact drawing.** The pet is sized 120 x 80 px for a 24 x 16 grid (`src/pet/pet.css`); the pet window is that same size, written again in both Tauri configs and as `SMALL` in `src/pet/main.ts`; the milestone stars are placed at `top: 52px` to land on the dark patch; and the two pictures must share one outline, because the open-eyed one sits under the closed one.
     *Cost if left:* a redrawn slime with another size or outline shows blurred pixels, stars in the wrong place, or the open eyes peeking out from behind the closed picture.
 32. **The wake-up splash has not been looked at in the real window.** The rest of the new pet has: the roadmap records the focus block (eyes open), the call back (hop) and a milestone star as seen, and the reinstalled app is in daily use.
-33. **The installed everyday app is a mix of frozen and live code.** It was last built from `tauri.daily.conf.json` on 2026-10-05, from commit `c90c6af` on `phase_2`, and copied to `/Applications`. Its window pages, icon and Rust code are frozen at build time, but it starts Python from this source tree (item 13), so every edit under `backend/` reaches it at once.
+33. **The installed everyday app is a mix of frozen and live code.** The copy in `/Applications` is dated 2026-10-07; the commit it was built from is not recorded (the build before it was `c90c6af` on `phase_2`, 2026-10-05). Its window pages, icon and Rust code are frozen at build time, but it starts Python from this source tree (item 13), so every edit under `backend/` reaches it at once.
     *Cost if left:* a change to what the sidecar or the fetcher sends or expects, made on a dev branch, breaks the everyday app until it is rebuilt. Moving or renaming the project folder, or deleting `backend/.venv`, stops it starting the timer at all.
     *Fix:* rebuild and reinstall after any backend change; lasting fix is bundling Python (item 13).
 34. **Rebuilding the everyday app runs new migrations on real data.** Its database is in the OS app data dir and there are no down-migrations. The dev database in the project root is separate (`DECISIONS.md`, "Dev database in the project root"), so `npm run tauri dev` never touches real data; the risk starts when a new build is installed in `/Applications`.
@@ -131,7 +130,7 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 
            cp ~/Library/Application\ Support/com.hiennguyen.pet/pet.db.bak-2026-10-04 ~/Library/Application\ Support/com.hiennguyen.pet/pet.db
 
-    Three backups exist: `pet.db.bak-2026-10-04`, `-05` and `-05-1623`, the last from just before the latest reinstall. Old backups can be deleted once the app has run well for a few days; they also hold the old plain-text feed address (item 1).
+    Five backups exist: `pet.db.bak-2026-10-04`, `-05`, `-05-1623`, `-06` and `-07`, the last from just before the latest reinstall. Old backups can be deleted once the app has run well for a few days; the first three also hold the old plain-text feed address (item 1).
 35. **Only macOS icon needs are covered.** The Windows Store images and `icon.png` were deleted because no config named them. A Windows Store package, or any config that lists `icons/icon.png`, will fail to build until `npm run tauri icon src-tauri/app-icon.svg` is run again.
 36. **The version number lives in four places.** `package.json`, `Cargo.toml`, `tauri.conf.json` and `tauri.daily.conf.json` all say 0.2.0 now, matching the changelog, but each has to be changed by hand at the next bump.
     *Fix:* remove `"version"` from both Tauri configs so they fall back to `Cargo.toml`, leaving two places.
@@ -144,6 +143,7 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
     *Fix:* give `main` a `max-width` and centre it, or lay Today out in two columns.
 50. **Seen 2026-10-07: the "Sync now" result line works in the running app.** Pressing the button showed the sync working. The failure wording (red, naming the feed) has not been seen, since no feed failed.
 51. **Fixed 2026-10-07: the result line could go stale.** It was only written when the button was pressed, so a later automatic sync that failed left an old "✓ Synced at…" showing. The line is now redrawn from the feeds' own status on every `tasks` event (`refreshSyncResult` in `src/panel/main.ts`). Not yet watched across an automatic sync.
+52. **Fixed 2026-10-07: any error from the Python sidecar threw away the running focus block.** `sidecar_call` dropped the process on every error, including ordinary ones such as quick-add's "a task needs a title", and the timer lives in that process. It is now dropped only when the pipe or the reply is broken. The unused `backend_call` command, which let the window call any sidecar method, was removed with it.
 
 ## Setup traps
 

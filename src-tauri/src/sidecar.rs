@@ -4,7 +4,6 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::Mutex;
 
 use serde_json::{json, Value};
-use tauri::State;
 
 // ---- Python sidecar: one JSON object per line over stdin/stdout ----
 
@@ -35,39 +34,45 @@ pub(crate) fn spawn_sidecar() -> std::io::Result<Sidecar> {
     })
 }
 
-pub(crate) fn call(sidecar: &mut Sidecar, method: &str, params: Option<Value>) -> Result<Value, String> {
+/// One request and its reply line. An error here means the process or the pipe is broken.
+fn exchange(sidecar: &mut Sidecar, method: &str, params: Option<Value>) -> Result<Value, String> {
     writeln!(sidecar.stdin, "{}", json!({ "method": method, "params": params }))
         .map_err(|e| e.to_string())?;
     let mut line = String::new();
     sidecar.stdout.read_line(&mut line).map_err(|e| e.to_string())?;
-    let mut res: Value =
-        serde_json::from_str(&line).map_err(|e| format!("bad sidecar reply {line:?}: {e}"))?;
+    serde_json::from_str(&line).map_err(|e| format!("bad sidecar reply {line:?}: {e}"))
+}
+
+/// A reply's `ok`, or the error the method raised.
+fn answer(mut res: Value) -> Result<Value, String> {
     match res.get("error") {
         Some(err) => Err(err.to_string()),
         None => Ok(res["ok"].take()),
     }
 }
 
+#[cfg(test)]
+pub(crate) fn call(sidecar: &mut Sidecar, method: &str, params: Option<Value>) -> Result<Value, String> {
+    answer(exchange(sidecar, method, params)?)
+}
+
 // ponytail: one sidecar behind one lock, so a long job (graph building) would stall the
 // timer tick. Give long jobs their own process when Phase 5 adds them.
 pub(crate) fn sidecar_call(backend: &Backend, method: &str, params: Option<Value>) -> Result<Value, String> {
-    let mut guard = backend.0.lock().unwrap();
+    // after a panic mid-call the pipe may hold half a reply, so that process is not used again
+    let mut guard = backend.0.lock().unwrap_or_else(|poisoned| {
+        let mut guard = poisoned.into_inner();
+        *guard = None;
+        guard
+    });
     if guard.is_none() {
         *guard = Some(spawn_sidecar().map_err(|e| format!("can't start python backend: {e}"))?);
     }
-    let res = call(guard.as_mut().unwrap(), method, params);
+    let res = exchange(guard.as_mut().unwrap(), method, params);
     if res.is_err() {
-        *guard = None; // respawn on next call in case the process died
+        // respawn on next call in case the process died. Not for an error a method raised:
+        // the timer lives in that process, and a block in progress would go with it.
+        *guard = None;
     }
-    res
-}
-
-// async: runs off the main thread, since sidecar jobs can be slow
-#[tauri::command(async)]
-pub(crate) fn backend_call(
-    backend: State<Backend>,
-    method: String,
-    params: Option<Value>,
-) -> Result<Value, String> {
-    sidecar_call(&backend, &method, params)
+    answer(res?)
 }

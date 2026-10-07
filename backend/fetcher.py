@@ -188,6 +188,8 @@ def run(request, now, download=download, call=call):
             out[source] = {"ok": job()}
         except FeedError as e:
             out[source] = {"error": str(e)}
+        except Exception as e:  # a bug, or a reply in a shape nobody expected: only its kind is safe to show
+            out[source] = {"error": f"the task fetcher failed: {type(e).__name__}"}
     return out
 
 

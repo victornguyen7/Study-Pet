@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::db::{setting, DataDir, Db, Syncing};
+use crate::db::{lock, setting, DataDir, Db, Syncing};
 use crate::keychain::{keychain_delete, keychain_get, keychain_set};
 
 // ---- Imports: feeds parsed by backend/feeds.py ----
@@ -298,10 +298,10 @@ pub(crate) fn save_feed_status(conn: &Connection, source: &str, mut status: Valu
 /// The database is not locked while the fetcher is on the network.
 pub(crate) fn sync_feeds(app: &AppHandle) -> Result<(), String> {
     let syncing = app.state::<Syncing>();
-    let _one_at_a_time = syncing.0.lock().unwrap();
+    let _one_at_a_time = lock(&syncing.0);
     let db = app.state::<Db>();
     let (urls, files, signed_in) = {
-        let conn = db.0.lock().unwrap();
+        let conn = lock(&db.0);
         (
             feed_urls(&conn, &app.config().identifier)?,
             feed_files(&conn).map_err(|e| e.to_string())?,
@@ -333,7 +333,7 @@ pub(crate) fn sync_feeds(app: &AppHandle) -> Result<(), String> {
             run_fetcher(&json!({ "feeds": feeds, "files": files, "accounts": accounts }))
         };
         let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-        let conn = db.0.lock().unwrap();
+        let conn = lock(&db.0);
         let mut statuses: Vec<(String, Value)> = failed.into_iter().map(|(s, error)| (s.to_string(), json!({ "at": now, "error": error }))).collect();
         for source in asked {
             let status = match &reply {
@@ -351,7 +351,7 @@ pub(crate) fn sync_feeds(app: &AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn feeds(db: State<Db>) -> Result<Vec<Value>, String> {
-    feed_list(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    feed_list(&lock(&db.0)).map_err(|e| e.to_string())
 }
 
 /// Saves the address for "canvas" or "google" and syncs straight away. An empty `url` forgets the feed.
@@ -359,9 +359,9 @@ pub(crate) fn feeds(db: State<Db>) -> Result<Vec<Value>, String> {
 pub(crate) fn set_feed(app: AppHandle, source: String, url: String) -> Result<(), String> {
     {
         let syncing = app.state::<Syncing>();
-        let _one_at_a_time = syncing.0.lock().unwrap();
+        let _one_at_a_time = lock(&syncing.0);
         let db = app.state::<Db>();
-        let conn = db.0.lock().unwrap();
+        let conn = lock(&db.0);
         save_feed_url(&conn, &app.config().identifier, &source, url.trim())?;
     }
     if source == "google" {
@@ -375,9 +375,9 @@ pub(crate) fn set_feed(app: AppHandle, source: String, url: String) -> Result<()
 pub(crate) fn set_feed_file(app: AppHandle, source: String, ics: String) -> Result<(), String> {
     {
         let syncing = app.state::<Syncing>();
-        let _one_at_a_time = syncing.0.lock().unwrap();
+        let _one_at_a_time = lock(&syncing.0);
         let db = app.state::<Db>();
-        let conn = db.0.lock().unwrap();
+        let conn = lock(&db.0);
         save_feed_file(&conn, &source, &ics)?;
     }
     // the file takes the place of an address or an account, so their secrets go
@@ -401,9 +401,9 @@ pub(crate) fn connect_google(app: AppHandle) -> Result<(), String> {
     keychain_delete(&app.config().identifier, "feed_url_google"); // the account takes the address's place
     {
         let syncing = app.state::<Syncing>();
-        let _one_at_a_time = syncing.0.lock().unwrap();
+        let _one_at_a_time = lock(&syncing.0);
         let db = app.state::<Db>();
-        let conn = db.0.lock().unwrap();
+        let conn = lock(&db.0);
         replace_feed(&conn, "google", "feed_account_", "1").map_err(|e| e.to_string())?;
     }
     sync_feeds(&app)
@@ -438,5 +438,5 @@ pub(crate) fn events_today(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
 
 #[tauri::command]
 pub(crate) fn list_events(db: State<Db>) -> Result<Vec<Value>, String> {
-    events_today(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    events_today(&lock(&db.0)).map_err(|e| e.to_string())
 }

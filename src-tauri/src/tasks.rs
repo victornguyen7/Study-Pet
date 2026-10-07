@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::State;
 
-use crate::db::{setting, Db};
+use crate::db::{lock, setting, Db};
 use crate::sidecar::{sidecar_call, Backend};
 
 // ---- Tasks: quick-add parsing in backend/tasks.py ----
@@ -28,15 +28,12 @@ pub(crate) fn insert_task(conn: &Connection, t: &NewTask) -> rusqlite::Result<i6
 /// `text` is one quick-add line, such as "STAT 310 HW3 Fri 2h". Returns the new task with its id.
 #[tauri::command(async)]
 pub(crate) fn add_task(db: State<Db>, backend: State<Backend>, text: String) -> Result<Value, String> {
-    let today: String = db
-        .0
-        .lock()
-        .unwrap()
+    let today: String = lock(&db.0)
         .query_row("SELECT date('now', 'localtime')", [], |r| r.get(0))
         .map_err(|e| e.to_string())?;
     let parsed = sidecar_call(&backend, "quick_add", Some(json!({ "text": text, "today": today })))?;
     let task: NewTask = serde_json::from_value(parsed).map_err(|e| e.to_string())?;
-    let id = insert_task(&db.0.lock().unwrap(), &task).map_err(|e| e.to_string())?;
+    let id = insert_task(&lock(&db.0), &task).map_err(|e| e.to_string())?;
     let mut task = json!(task);
     task["id"] = json!(id);
     Ok(task)
@@ -270,12 +267,12 @@ pub(crate) fn set_done(conn: &Connection, id: i64, done: bool) -> rusqlite::Resu
 
 #[tauri::command]
 pub(crate) fn list_tasks(db: State<Db>) -> Result<Vec<Task>, String> {
-    tasks(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    tasks(&lock(&db.0)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub(crate) fn set_task_done(db: State<Db>, id: i64, done: bool) -> Result<(), String> {
-    match set_done(&db.0.lock().unwrap(), id, done) {
+    match set_done(&lock(&db.0), id, done) {
         Ok(0) => Err(format!("no task with id {id}")),
         Ok(_) => Ok(()),
         Err(e) => Err(e.to_string()),
@@ -298,20 +295,20 @@ pub(crate) fn remove_task(conn: &Connection, id: i64) -> rusqlite::Result<()> {
 
 #[tauri::command]
 pub(crate) fn delete_task(db: State<Db>, id: i64) -> Result<(), String> {
-    remove_task(&db.0.lock().unwrap(), id).map_err(|e| e.to_string())
+    remove_task(&lock(&db.0), id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub(crate) fn merge_task(db: State<Db>, typed: i64, imported: i64) -> Result<(), String> {
-    merge_tasks(&db.0.lock().unwrap(), typed, imported).map_err(|_| "those two tasks can't be merged".to_string())
+    merge_tasks(&lock(&db.0), typed, imported).map_err(|_| "those two tasks can't be merged".to_string())
 }
 
 #[tauri::command]
 pub(crate) fn list_courses(db: State<Db>) -> Result<Vec<Value>, String> {
-    courses(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    courses(&lock(&db.0)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub(crate) fn set_course(db: State<Db>, course: String, shown: bool) -> Result<(), String> {
-    set_course_shown(&db.0.lock().unwrap(), &course, shown).map_err(|e| e.to_string())
+    set_course_shown(&lock(&db.0), &course, shown).map_err(|e| e.to_string())
 }

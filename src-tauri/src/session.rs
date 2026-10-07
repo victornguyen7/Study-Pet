@@ -1,7 +1,7 @@
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::db::{save_session, setting, streak_input, Db, Session};
+use crate::db::{lock, save_session, setting, streak_input, Db, Session};
 use crate::sidecar::{sidecar_call, Backend};
 
 // ---- Session timer: logic in backend/timer.py, storage and fan-out to the windows here ----
@@ -13,7 +13,7 @@ pub(crate) fn timer_action(app: &AppHandle, params: Value) -> Result<Value, Stri
     if !sessions.is_empty() {
         {
             let db = app.state::<Db>();
-            let conn = db.0.lock().unwrap();
+            let conn = lock(&db.0);
             for s in &sessions {
                 save_session(&conn, s).map_err(|e| e.to_string())?;
             }
@@ -33,7 +33,7 @@ pub(crate) fn timer(app: AppHandle, params: Value) -> Result<Value, String> {
 // ---- Sounds: a macOS system sound when a break starts and when the pet calls the user back ----
 
 pub(crate) fn play_sound(app: &AppHandle, name: &str) {
-    let off = setting(&app.state::<Db>().0.lock().unwrap(), "sounds").ok().flatten().as_deref() == Some("0");
+    let off = setting(&lock(&app.state::<Db>().0), "sounds").ok().flatten().as_deref() == Some("0");
     if off {
         return;
     }
@@ -50,7 +50,7 @@ pub(crate) fn play_sound(app: &AppHandle, name: &str) {
 #[tauri::command(async)]
 pub(crate) fn sounds(app: AppHandle, on: Option<bool>) -> Result<bool, String> {
     let db = app.state::<Db>();
-    let conn = db.0.lock().unwrap();
+    let conn = lock(&db.0);
     if let Some(on) = on {
         conn.execute("INSERT OR REPLACE INTO setting (key, value) VALUES ('sounds', ?1)", [if on { "1" } else { "0" }])
             .map_err(|e| e.to_string())?;
@@ -64,7 +64,7 @@ pub(crate) fn sounds(app: AppHandle, on: Option<bool>) -> Result<bool, String> {
 pub(crate) fn streak_state(app: &AppHandle) -> Result<Value, String> {
     let input = {
         let db = app.state::<Db>();
-        let conn = db.0.lock().unwrap();
+        let conn = lock(&db.0);
         streak_input(&conn).map_err(|e| e.to_string())?
     };
     let state = sidecar_call(&app.state::<Backend>(), "streak", Some(input))?;
@@ -82,10 +82,7 @@ pub(crate) fn set_streak_threshold(app: AppHandle, minutes: f64) -> Result<Value
     if !(minutes >= 1.0 && minutes <= 24.0 * 60.0) {
         return Err("threshold must be between 1 minute and 24 hours".into());
     }
-    app.state::<Db>()
-        .0
-        .lock()
-        .unwrap()
+    lock(&app.state::<Db>().0)
         .execute(
             "INSERT OR REPLACE INTO setting (key, value) VALUES ('streak_threshold_min', ?1)",
             [minutes],

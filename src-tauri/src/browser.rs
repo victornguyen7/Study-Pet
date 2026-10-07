@@ -9,7 +9,7 @@ use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, State};
 
-use crate::db::Db;
+use crate::db::{lock, Db};
 
 // ---- Pages from the Chrome extension (C-1): address, title and time, for pages the user allowed ----
 //
@@ -108,7 +108,7 @@ fn serve(app: &AppHandle, mut stream: UnixStream) {
             return;
         }
         let (Some(url), Some(title)) = (message["url"].as_str(), message["title"].as_str()) else { return };
-        let saved = record_page(&app.state::<Db>().0.lock().unwrap(), url, title, chrono::Utc::now().timestamp());
+        let saved = record_page(&lock(&app.state::<Db>().0), url, title, chrono::Utc::now().timestamp());
         if let Err(e) = saved {
             eprintln!("page sample failed: {e}");
         }
@@ -165,5 +165,5 @@ pub(crate) fn site_time_today(conn: &Connection) -> rusqlite::Result<Vec<Value>>
 
 #[tauri::command]
 pub(crate) fn site_time(db: State<Db>) -> Result<Vec<Value>, String> {
-    site_time_today(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    site_time_today(&lock(&db.0)).map_err(|e| e.to_string())
 }

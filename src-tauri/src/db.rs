@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusqlite::{Connection, OptionalExtension};
 use chrono::DateTime;
@@ -10,6 +10,13 @@ use tauri::State;
 // ---- SQLite store ----
 
 pub(crate) struct Db(pub(crate) Mutex<Connection>);
+
+/// Takes a lock, also after a thread panicked while holding it: each use of the connection is one
+/// statement or one transaction, which rolls back, so nothing is left half done. Without this, one
+/// panic would make every later call panic too.
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 // ponytail: plain SQLite. Spec PR-4 wants encryption at rest: swap rusqlite's
 // "bundled" feature for "bundled-sqlcipher" + a keychain key before Phase 4 stores captured text.
@@ -118,7 +125,7 @@ pub(crate) struct Preset {
 
 #[tauri::command]
 pub(crate) fn list_presets(db: State<Db>) -> Result<Vec<Preset>, String> {
-    let conn = db.0.lock().unwrap();
+    let conn = lock(&db.0);
     let mut stmt = conn
         .prepare("SELECT id, name, focus_min, break_min FROM preset ORDER BY id")
         .map_err(|e| e.to_string())?;
@@ -141,8 +148,7 @@ pub(crate) fn add_preset(db: State<Db>, focus_min: i64, break_min: i64) -> Resul
     if focus_min < 1 || break_min < 1 {
         return Err("focus and break must be at least 1 minute".into());
     }
-    db.0.lock()
-        .unwrap()
+    lock(&db.0)
         .execute(
             "INSERT OR IGNORE INTO preset (name, focus_min, break_min) VALUES (?1, ?2, ?3)",
             (format!("{focus_min}/{break_min}"), focus_min, break_min),
@@ -153,8 +159,7 @@ pub(crate) fn add_preset(db: State<Db>, focus_min: i64, break_min: i64) -> Resul
 
 #[tauri::command]
 pub(crate) fn delete_preset(db: State<Db>, id: i64) -> Result<(), String> {
-    db.0.lock()
-        .unwrap()
+    lock(&db.0)
         .execute("DELETE FROM preset WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -227,7 +232,7 @@ pub(crate) fn day_data(conn: &Connection) -> rusqlite::Result<Value> {
 
 #[tauri::command]
 pub(crate) fn day(db: State<Db>) -> Result<Value, String> {
-    day_data(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    day_data(&lock(&db.0)).map_err(|e| e.to_string())
 }
 
 /// Held for a whole sync, so two never overlap and a feed is not changed in the middle of one.

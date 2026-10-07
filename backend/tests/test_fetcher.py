@@ -66,6 +66,11 @@ class FetcherTest(unittest.TestCase):
         out = run({"feeds": {"canvas": SECRET, "google": "https://example.com/a.ics"}}, NOW, one_down)
         self.assertEqual((len(out["canvas"]["ok"]), out["google"]), (3, {"error": "could not reach that address"}))
 
+    def test_a_crash_in_one_source_is_its_own_error_and_shows_no_secret(self):
+        # Google answers without an access token: a KeyError, not a FeedError
+        out = run({"feeds": {"canvas": SECRET}, "accounts": {"google": ACCOUNT}}, NOW, lambda url: CANVAS, lambda *a, **k: {"REFRESHTOKEN": 1})
+        self.assertEqual((len(out["canvas"]["ok"]), out["google"]), (3, {"error": "the task fetcher failed: KeyError"}))
+
 
 ACCOUNT = {"client_id": "id", "client_secret": "CLIENTSECRET", "refresh_token": "REFRESHTOKEN"}
 # The events of google.ics as Google's API lists them, plus two it must skip.

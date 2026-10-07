@@ -9,7 +9,7 @@ mod sidecar;
 use sidecar::Backend;
 
 mod db;
-use db::{init_db, DataDir, Db, Syncing};
+use db::{init_db, lock, DataDir, Db, Syncing};
 
 mod keychain;
 
@@ -93,7 +93,7 @@ pub fn run() {
                         // a task that has become due soon is mentioned by the pet, but never during a focus
                         // block: it waits, unmarked, and the first check after the block ends picks it up
                         if state.is_ok_and(|s| s["phase"] != "focus") {
-                            let text = take_reminder(&handle.state::<Db>().0.lock().unwrap());
+                            let text = take_reminder(&lock(&handle.state::<Db>().0));
                             match text {
                                 Ok(Some(text)) => drop(handle.emit("reminder", text)),
                                 // nothing due: an app or site the pet cannot place is asked about, once each
@@ -163,7 +163,6 @@ pub fn run() {
             db::add_preset,
             db::delete_preset,
             db::day,
-            sidecar::backend_call,
             session::timer,
             session::streak,
             session::set_streak_threshold,
@@ -634,10 +633,30 @@ mod tests {
     }
 
     #[test]
+    fn a_lock_survives_a_panic_while_it_was_held() {
+        let db = std::sync::Arc::new(Mutex::new(1));
+        let held = db.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = held.lock().unwrap();
+            panic!("on purpose");
+        })
+        .join();
+        assert!(db.lock().is_err());
+        assert_eq!(*lock(&db), 1);
+    }
+
+    #[test]
     fn sidecar_ping() {
         let mut sidecar = spawn_sidecar().unwrap();
         assert_eq!(call(&mut sidecar, "ping", None).unwrap()["pong"], true);
         assert!(call(&mut sidecar, "nope", None).is_err());
+
+        // an error a method raises leaves the process, and the block in progress, alone
+        let backend = Backend::default();
+        let start = json!({ "action": "start_focus", "focus_min": 25, "break_min": 5 });
+        sidecar_call(&backend, "timer", Some(start)).unwrap();
+        assert!(sidecar_call(&backend, "quick_add", Some(json!({ "text": "", "today": "2026-10-20" }))).is_err());
+        assert_eq!(sidecar_call(&backend, "timer", Some(json!({ "action": "tick" }))).unwrap()["phase"], "focus");
 
         let line = json!({ "text": "STAT 310 HW3 2026-10-23 2h", "today": "2026-10-20" });
         let task: NewTask = serde_json::from_value(call(&mut sidecar, "quick_add", Some(line)).unwrap()).unwrap();

@@ -2,7 +2,7 @@ use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, State};
 
-use crate::db::Db;
+use crate::db::{lock, Db};
 use crate::sidecar::{sidecar_call, Backend};
 
 // ---- Modes: the rules are in backend/modes.py; today's spans and the user's declarations come from here ----
@@ -61,14 +61,14 @@ pub(crate) fn mode_input(conn: &Connection) -> rusqlite::Result<Value> {
 /// Today's labeled stretches and the seconds per mode.
 #[tauri::command(async)]
 pub(crate) fn modes_today(app: AppHandle) -> Result<Value, String> {
-    let input = mode_input(&app.state::<Db>().0.lock().unwrap()).map_err(|e| e.to_string())?;
+    let input = mode_input(&lock(&app.state::<Db>().0)).map_err(|e| e.to_string())?;
     sidecar_call(&app.state::<Backend>(), "modes", Some(input))
 }
 
 /// The mode the user has declared, if any. Pass `set` to change it: "study", "work", "relax", or "" for none.
 #[tauri::command]
 pub(crate) fn declared_mode(db: State<Db>, set: Option<String>) -> Result<Option<String>, String> {
-    let conn = db.0.lock().unwrap();
+    let conn = lock(&db.0);
     if let Some(mode) = set {
         declare(&conn, Some(mode.as_str()).filter(|m| !m.is_empty())).map_err(|e| e.to_string())?;
     }
@@ -121,14 +121,14 @@ pub(crate) fn take_question(conn: &Connection, unknown: &Value) -> rusqlite::Res
 /// The question to put in the pet's bubble now, if there is a new one.
 pub(crate) fn question(app: &AppHandle) -> Result<Option<String>, String> {
     let day = modes_today(app.clone())?;
-    take_question(&app.state::<Db>().0.lock().unwrap(), &day["unknown"]).map_err(|e| e.to_string())
+    take_question(&lock(&app.state::<Db>().0), &day["unknown"]).map_err(|e| e.to_string())
 }
 
 /// Every answer the pet remembers. Pass `key`, `name` and `mode` to save one; an empty `mode` forgets it,
 /// and the pet may then ask again.
 #[tauri::command]
 pub(crate) fn learned(db: State<Db>, key: Option<String>, name: Option<String>, mode: Option<String>) -> Result<Vec<Value>, String> {
-    let conn = db.0.lock().unwrap();
+    let conn = lock(&db.0);
     if let (Some(key), Some(mode)) = (key, mode) {
         if mode.is_empty() {
             conn.execute("DELETE FROM app_rule WHERE key = ?1", [&key]).map(drop)

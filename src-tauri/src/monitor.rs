@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, State};
 
 use crate::browser::{GAP_SECS, PAUSED};
-use crate::db::Db;
+use crate::db::{lock, Db};
 
 // ---- Front app (C-1, C-3): which app is in front, and for how long ----
 //
@@ -114,7 +114,7 @@ pub(crate) fn start(app: AppHandle) {
         }
         let Some((name, bundle)) = front_app().map(gate) else { continue };
         let db = app.state::<Db>();
-        let conn = db.0.lock().unwrap();
+        let conn = lock(&db.0);
         // the user's own Private apps, by the same key backend/modes.py uses
         let saved = crate::modes::is_private(&conn, bundle.as_deref().unwrap_or(&name)).and_then(|private| {
             let (name, bundle) = if private { ("Private", None) } else { (name.as_str(), bundle.as_deref()) };
@@ -139,7 +139,7 @@ pub(crate) fn app_time_today(conn: &Connection) -> rusqlite::Result<Vec<Value>> 
 
 #[tauri::command]
 pub(crate) fn app_time(db: State<Db>) -> Result<Vec<Value>, String> {
-    app_time_today(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    app_time_today(&lock(&db.0)).map_err(|e| e.to_string())
 }
 
 // ---- Accessibility permission (PR-10): asked for only from Settings, where it is explained ----
