@@ -15,6 +15,9 @@ mod keychain;
 
 mod windows;
 
+#[cfg(unix)]
+mod browser;
+
 mod session;
 use session::{play_sound, streak_state, timer_action};
 
@@ -43,6 +46,11 @@ pub fn run() {
             init_db(&conn)?;
             move_feed_urls_to_keychain(&conn, &app.config().identifier)?;
             app.manage(Db(Mutex::new(conn)));
+            // pages from the Chrome extension; the pet works without them
+            #[cfg(unix)]
+            if let Err(e) = browser::start(app.handle().clone(), &dir, &app.path().home_dir()?) {
+                eprintln!("browser extension link failed: {e}");
+            }
             app.manage(DataDir(dir));
 
             // drive the timer once a second; every window hears the new state as a "timer" event
@@ -55,6 +63,12 @@ pub fn run() {
                     if let Err(e) = &state {
                         eprintln!("timer tick failed: {e}");
                     }
+                    // C-4: pages from the extension are not noted during a break
+                    #[cfg(unix)]
+                    browser::PAUSED.store(
+                        state.as_ref().is_ok_and(|s| s["phase"] == "break"),
+                        std::sync::atomic::Ordering::Relaxed,
+                    );
                     // a break that starts, and each time the pet calls the user back from one
                     if let Ok(s) = &state {
                         let key = json!([s["phase"], s["calls"]]);
@@ -155,7 +169,9 @@ pub fn run() {
             feeds::connect_google,
             feeds::sync_now,
             feeds::list_events,
-            windows::toggle_panel
+            windows::toggle_panel,
+            #[cfg(unix)]
+            browser::site_time
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -183,6 +199,42 @@ mod tests {
         save_session(&conn, &s).unwrap();
         let ended: String = conn.query_row("SELECT ended_at FROM session", [], |r| r.get(0)).unwrap();
         assert_eq!(ended, "1970-01-01T00:25:00+00:00");
+    }
+
+    #[test]
+    fn pages_join_into_spans_and_only_web_addresses_are_kept() {
+        use browser::{read_frames, record_page, site_time_today};
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        let now: i64 = conn.query_row("SELECT unixepoch('now')", [], |r| r.get(0)).unwrap();
+        let t = now - 1000;
+        // 10 s on one page (a #fragment is the same page), 5 s on another, then a sample after a gap
+        assert!(record_page(&conn, "https://canvas.edu/a", "A", t).unwrap());
+        assert!(record_page(&conn, "https://canvas.edu/a#top", "A", t + 5).unwrap());
+        assert!(record_page(&conn, "https://canvas.edu/a", "A, renamed", t + 10).unwrap());
+        assert!(record_page(&conn, "https://docs.rs/b?q=1", "B", t + 15).unwrap());
+        assert!(record_page(&conn, "https://docs.rs/b?q=1", "B", t + 600).unwrap());
+        for other in ["chrome://settings", "file:///etc/passwd", "not an address"] {
+            assert!(!record_page(&conn, other, "", t + 600).unwrap());
+        }
+        let rows: Vec<(String, String)> = conn
+            .prepare("SELECT url, title FROM activity_span ORDER BY id").unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap()
+            .collect::<rusqlite::Result<_>>().unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0], ("https://canvas.edu/a".into(), "A, renamed".into()));
+        // run just after local midnight, the spans fall on yesterday and today's list is empty
+        let today: bool = conn.query_row("SELECT date(?1, 'unixepoch', 'localtime') = date('now', 'localtime')", [t], |r| r.get(0)).unwrap();
+        if today {
+            assert_eq!(site_time_today(&conn).unwrap(), [json!({ "domain": "canvas.edu", "seconds": 10 }), json!({ "domain": "docs.rs", "seconds": 5 })]);
+        }
+
+        // frames as Chrome sends them; an oversized length ends the reading
+        let frame = |body: &str| [&(body.len() as u32).to_ne_bytes()[..], body.as_bytes()].concat();
+        let bytes = [frame(r#"{"url":"u"}"#), frame("{}"), u32::MAX.to_ne_bytes().to_vec(), frame("{}")].concat();
+        let mut seen = vec![];
+        read_frames(&bytes[..], |m| seen.push(m));
+        assert_eq!(seen, [json!({ "url": "u" }), json!({})]);
     }
 
     #[test]

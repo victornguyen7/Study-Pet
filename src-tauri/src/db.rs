@@ -62,6 +62,14 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             end_at TEXT NOT NULL,
             all_day INTEGER NOT NULL DEFAULT 0,
             UNIQUE (source, uid)
+        );
+        CREATE TABLE IF NOT EXISTS activity_span (
+            id INTEGER PRIMARY KEY,
+            started_at TEXT NOT NULL, -- UTC timestamp
+            ended_at TEXT NOT NULL,
+            domain TEXT NOT NULL,
+            url TEXT NOT NULL,        -- without its #fragment
+            title TEXT NOT NULL
         );",
     )?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;

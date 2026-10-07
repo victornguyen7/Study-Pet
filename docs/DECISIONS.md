@@ -350,3 +350,29 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Rejected:** `visibleOnAllWorkspaces` on the panel too; a normal window that follows across every desktop is in the way.
 - **Gave up:** a macOS-only dependency (`objc2-app-kit`) and one `unsafe` pointer cast, both behind `cfg(target_os = "macos")`. Other platforms get no equivalent.
 - **Revisit when:** Tauri exposes the collection behavior, or the Windows build starts.
+
+## Phase 3 · Focus keeper and modes
+
+### The Chrome extension came first, and it talks to the app by native messaging
+- **Why:** chosen on 2026-10-07. The front-app monitor was built and removed the same day; recording pages in Chrome was wanted first. Native messaging over a local port: no port is open for other software to reach, and Chrome only lets the listed extension ID start the host.
+- **Detail:** Chrome starts the host as its own process, so the host is a two-line script (`chrome-host.sh`, written beside `pet.db` at launch) that runs `nc -U` on a Unix socket the app listens on (`ext.sock`). The app also writes the host manifest into Chrome's `NativeMessagingHosts` folder. The extension's ID is fixed by the `key` in `extension/manifest.json`; its private half was thrown away, since only the ID matters for an unpacked extension.
+- **Gave up:** Chrome only (Edge needs one more manifest). The dev and the everyday app would share one host name, so Chrome talks to whichever started last. Any program running as the user can write made-up pages to the socket.
+- **Revisit when:** the everyday app gets this build, or the extension goes to the Chrome Web Store (which assigns its own ID).
+
+### Recorded pages live in the app, never in Chrome
+- **Why:** Chrome's storage would keep recording with the pet closed, against "eyes open means watching" (PR-3), is capped at about 10 MB, and would be a second place for the data panel (PR-8) to cover. With the app closed the host cannot reach the socket, the extension gets no hello, and nothing is sent or asked.
+- **Detail:** the app drops samples during a break (C-4).
+- **Gave up:** time on an allowed page while the app is closed is lost.
+- **Revisit when:** the data panel is built.
+
+### The extension asks on every page and remembers nothing
+- **Why:** asked for on 2026-10-07, the same day a once-per-site version with a remembered list was built and replaced. There is no list of sites anywhere, typed or learned. A yes covers one page in one tab, held in `chrome.storage.session` until the tab goes to another address or Chrome closes; that answer is the privacy gate for pages, so a page with no yes is never sent.
+- **Detail:** a page that changes its address without loading again (the next video on YouTube) is told to ask again, through `tabs.onUpdated`. A change of `#fragment` alone is the same page.
+- **Detail:** a page with no answer is also asked when its tab comes to the front or the app connects, which covers tabs opened before the extension was loaded (the banner script is put in with `chrome.scripting`, hence the `scripting` and host permissions). A no is held the same way as a yes, so switching back does not ask again; reloading the same address keeps the answer.
+- **Gave up:** PR-2's "saves the answer": every page costs a click. This will be tiring on a normal study day.
+- **Revisit when:** the asking gets in the way; a remembered answer per site, kept in the app's `app_rule` table, is the spec's design.
+
+### A page is kept as its full address, title and time
+- **Why:** asked for on 2026-10-07. The query string stays because it tells pages apart (a YouTube video is `?v=...`); the `#fragment` is dropped. Samples of the same address join into one `activity_span` row; a sample more than 15 s after the last starts a new row.
+- **Gave up:** an address can carry private text in its query (a search, a share token), and it is stored in a database that is not encrypted yet. `activity_span` has no app, mode, tier or label source until something fills them.
+- **Revisit when:** the SQLCipher task in Phase 4, and the classifier.

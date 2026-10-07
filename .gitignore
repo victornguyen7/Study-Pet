@@ -39,3 +39,7 @@ spike/
 
 # the Google OAuth client for the dev app (docs/google_calendar_oauth.md)
 google_client.json
+
+# the socket and host script the Chrome extension link writes beside pet.db in dev builds
+ext.sock
+chrome-host.sh

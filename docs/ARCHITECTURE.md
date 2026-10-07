@@ -59,6 +59,7 @@ flowchart LR
 | `task` | Typed and imported tasks: title, course, due, estimate, status, and `hidden_at` for an imported task the user deleted | Yes |
 | `task_source_link` | Which imported item a task came from; `(source, source_uid)` is unique so a re-import cannot duplicate; `removed_at` marks one that left its feed | Yes |
 | `calendar_event` | Imported calendar events from yesterday to 30 days ahead, replaced on every sync | Yes |
+| `activity_span` | Pages from the Chrome extension: site, address, title, start and end | Yes |
 
 ### How the layers talk
 

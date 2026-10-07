@@ -227,12 +227,14 @@ form {
 
 /* ---- tasks ---- */
 
-#task-head {
+#task-head,
+#sites-head {
   justify-content: space-between;
   margin-bottom: 6px;
 }
 
-#task-head h2 {
+#task-head h2,
+#sites-head h2 {
   margin: 0;
 }
 

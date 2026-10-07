@@ -462,6 +462,21 @@ const level = document.querySelector<HTMLElement>(".level")!;
 
 // ---- the day: today's blocks, the wrap-up and the 7-day strip ----
 
+// Mirrors site_time_today() in src-tauri/src/browser.rs
+async function loadSites() {
+  const sites = await invoke<{ domain: string; seconds: number }[]>("site_time");
+  $("sites").replaceChildren(
+    ...sites.map((s) => {
+      const li = el("li");
+      li.append(el("span", s.domain), el("span", duration(s.seconds / 60)));
+      return li;
+    }),
+  );
+  if (!sites.length) $("sites").append(el("li", "Nothing noted yet today.", "empty"));
+}
+// the list also reloads by itself once a minute, with the rest of the day
+$("sites-refresh").onclick = () => run(loadSites);
+
 async function loadDay(streak: StreakState) {
   const day = await invoke<Day>("day");
 
@@ -495,6 +510,8 @@ async function loadDay(streak: StreakState) {
     : "Nothing logged today yet. A focus block of any length counts.";
   $("wrap-streak").textContent =
     `${goal} Your streak is ${streakText}, with ${plural(streak.freezes_left, "freeze")} left this month.`;
+
+  await loadSites();
 
   // 7 days ending today; noon avoids daylight-saving edges when stepping by day
   const days = Array.from({ length: 7 }, (_, i) => {

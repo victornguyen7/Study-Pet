@@ -35,7 +35,7 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 
 | Part | Checked how |
 | --- | --- |
-| Parser, fetcher, storage rules, file upload path | Automated tests (45 Python, 13 Rust, counting the later features) |
+| Parser, fetcher, storage rules, file upload path | Automated tests (45 Python, 14 Rust, counting the later features) |
 | Real Canvas feed, end to end into a throwaway database | Run by hand on 2026-10-04: 102 assignments in the feed, 54 imported, 48 skipped as already past, a second sync added nothing |
 | App starts and migrates the database | Launched once; no errors |
 | Imports section in Settings (address, "Upload .ics", disconnect), schedule list, "removed from Canvas" note | **Not clicked through.** They compile and the commands behind them are tested, but nobody has looked at them on screen |

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased · Phase 3
+
+**Added**
+- Chrome extension in `extension/` (load it unpacked): on every page opened it asks "can I look at this page?", and for an allowed page in front sends its address and title to the app every 5 seconds. No answer is remembered: a yes covers that page in that tab until the tab goes somewhere else. Its popup says whether the app is connected.
+- The app receives pages by native messaging (`browser.rs`): a Unix socket `ext.sock` and a host script `chrome-host.sh` beside `pet.db`, and a host manifest written into Chrome's folder at launch. Nothing is recorded while the app is closed or during a break.
+- New table `activity_span` (start, end, site, address, title) and command `site_time`. "Sites today" in the Wrap up view lists time per site.
+
 ## 0.2.0 · Phase 2, in progress
 
 **Added**

@@ -129,7 +129,8 @@ flowchart TD
 **Tasks**
 - [x] Split `lib.rs` into modules before the monitor adds to it (no change in behavior; run the app once to confirm)
 - [ ] Window monitor: front app and title every 5 s
-- [ ] Browser extension that reports the URL
+- [x] Browser extension that reports the URL: `extension/` for Chrome asks "can I look at this page?" on every page opened, remembering nothing, and sends the address and title of an allowed page in front every 5 s; the app keeps them in `activity_span` and lists time per site in Wrap up (2026-10-07, built ahead of the window monitor by choice; the app side was run with made-up pages, the extension itself has not been loaded in Chrome yet)
+- [ ] Load the extension in Chrome and try it: the banner, the popup, a span for a real page, nothing during a break or with the app closed
 - [ ] Onboarding that explains each OS permission before asking (PR-10)
 - [ ] Privacy gate with default Private apps, running before anything else (PR-1)
 - [ ] Mode classifier: declaration, learned rule, app category, context
@@ -139,7 +140,7 @@ flowchart TD
 - [ ] Pet states: Relaxing, Headphones, Nudging, Happy
 - [ ] Time balance per mode in the wrap-up view
 
-**To decide:** how the extension talks to the app (native messaging or a local port).
+**Decided:** the extension talks to the app by native messaging (2026-10-07, see `DECISIONS.md`).
 
 **Gate:** 9 of 10 spans labeled right on a test day.
 
