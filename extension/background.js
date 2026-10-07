@@ -4,16 +4,19 @@
 // one of its pages loads or comes to the front.
 // The app keeps what is sent; Chrome keeps only the list of sites and their answers.
 
-const HOST = "com.hiennguyen.pet"; // HOST_NAME in src-tauri/src/browser.rs
+// Each app's host is named after its identifier (start in src-tauri/src/browser.rs). The everyday app
+// comes first: the dev build gets the pages only while the everyday app is closed.
+const HOSTS = ["com.hiennguyen.pet", "com.hiennguyen.pet.dev"];
 let port = null;
 let connected = false; // true once the app has said hello
 
-function connect() {
-  if (port) return;
-  const p = chrome.runtime.connectNative(HOST);
+function connect(i = 0) {
+  if (port || i >= HOSTS.length) return;
+  const p = chrome.runtime.connectNative(HOSTS[i]);
   port = p;
+  let hello = false;
   p.onMessage.addListener(() => {
-    connected = true;
+    hello = connected = true;
     askFront(); // pages that loaded before the pet was there
   });
   // the app is not running, or it quit
@@ -22,6 +25,7 @@ function connect() {
     if (port === p) {
       port = null;
       connected = false;
+      if (!hello) connect(i + 1); // that app is not there: try the next
     }
   });
 }
@@ -60,7 +64,7 @@ async function sample() {
 connect();
 setInterval(sample, 5000);
 chrome.alarms.create("connect", { periodInMinutes: 0.5 });
-chrome.alarms.onAlarm.addListener(connect);
+chrome.alarms.onAlarm.addListener(() => connect());
 
 // a page that changes its address without loading runs no new content script, so a move to a site
 // with no answer is asked about from here

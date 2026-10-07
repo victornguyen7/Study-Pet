@@ -22,7 +22,6 @@ pub(crate) const GAP_SECS: i64 = 15;
 /// C-4: set by the timer thread during a break; samples are dropped while it is set.
 pub(crate) static PAUSED: AtomicBool = AtomicBool::new(false);
 
-const HOST_NAME: &str = "com.hiennguyen.pet";
 /// Fixed by the `key` in extension/manifest.json.
 const EXTENSION_ID: &str = "jenjlnnminflmafgghiodlmpokbkeble";
 
@@ -117,10 +116,12 @@ fn serve(app: &AppHandle, mut stream: UnixStream) {
 
 /// Opens the socket in the data folder and tells Chrome where the host is.
 // ponytail: any program running as the user can write to the socket and add made-up pages, the same
-// reach it has into the Keychain. The dev and the everyday app share one host name, so Chrome talks
-// to whichever started last; give each its own name if both must record.
+// reach it has into the Keychain.
+// The host is named after the app's identifier, so the dev and the everyday app each have their own
+// and neither overwrites the other's; HOSTS in extension/background.js lists both, the everyday app first.
 pub(crate) fn start(app: AppHandle, dir: &Path, home: &Path) -> std::io::Result<()> {
     let dir = dir.canonicalize()?;
+    let name = app.config().identifier.clone();
     let socket = dir.join("ext.sock");
     let _ = fs::remove_file(&socket); // left by the last run
     let listener = UnixListener::bind(&socket)?;
@@ -143,13 +144,13 @@ pub(crate) fn start(app: AppHandle, dir: &Path, home: &Path) -> std::io::Result<
     let hosts = chrome.join("NativeMessagingHosts");
     fs::create_dir_all(&hosts)?;
     let manifest = json!({
-        "name": HOST_NAME,
+        "name": name,
         "description": "Study Pet",
         "path": host,
         "type": "stdio",
         "allowed_origins": [format!("chrome-extension://{EXTENSION_ID}/")],
     });
-    fs::write(hosts.join(format!("{HOST_NAME}.json")), manifest.to_string())
+    fs::write(hosts.join(format!("{name}.json")), manifest.to_string())
 }
 
 /// Today's seconds per site, longest first.

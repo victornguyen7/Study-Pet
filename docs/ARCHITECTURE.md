@@ -1,12 +1,12 @@
 # Architecture
 
-This page has two halves: what is built today (Phase 1 and most of Phase 2), and the full system the spec describes, in the order it gets built. Why each choice was made is in `DECISIONS.md`; what is fragile or unfinished is in `KNOWN_ISSUES.md`.
+This page has two halves: what is built today (Phases 1 and 2, and the first half of Phase 3), and the full system the spec describes, in the order it gets built. Why each choice was made is in `DECISIONS.md`; what is fragile or unfinished is in `KNOWN_ISSUES.md`.
 
 ## The idea in one paragraph
 
 Study Pet is three layers. The **UI** (two small web pages) only draws what it is told. The **Rust core** owns everything that must be held or stored: the windows, the database, the clock tick. The **Python sidecar** holds the rules: given some input, it returns an answer and remembers nothing on disk. Every later phase adds parts to this same shape. The first such part is built: the **task fetcher**, a second Python process that is the only thing allowed on the network.
 
-## Today: Phase 1 and most of Phase 2
+## Today: Phases 1 and 2, and the first half of Phase 3
 
 ```mermaid
 flowchart LR
@@ -17,17 +17,21 @@ flowchart LR
     subgraph CORE["Rust core · src-tauri/src/"]
         CMD["Commands"]
         TICK["1-second tick"]
+        MON["Front-app monitor<br/>every 5 s, macOS"]
+        SOCK["Unix socket<br/>ext.sock"]
         DB[("SQLite<br/>pet.db")]
     end
     subgraph PY["Python sidecar · backend/"]
         TIMER["timer.py"]
         STREAK["streaks.py"]
         TASKS["tasks.py"]
+        MODES["modes.py"]
     end
     subgraph NET["Task fetcher · backend/fetcher.py"]
         FETCH["download + feeds.py"]
     end
     ICS(["Canvas and Google<br/>ICS addresses"])
+    EXT(["Chrome extension<br/>extension/"])
     PET -->|invoke| CMD
     PANEL -->|invoke| CMD
     CMD -->|"events: timer, streak"| PET
@@ -37,6 +41,10 @@ flowchart LR
     CMD <-->|"JSON lines, stdin/stdout"| TIMER
     CMD <-->|"JSON lines, stdin/stdout"| STREAK
     CMD <-->|"JSON lines, stdin/stdout"| TASKS
+    CMD <-->|"JSON lines, stdin/stdout"| MODES
+    MON -->|"app name, after the privacy gate"| DB
+    EXT -.->|"native messaging:<br/>address and title of an allowed page"| SOCK
+    SOCK --> DB
     CMD -->|"addresses and uploaded files, stdin"| FETCH
     FETCH -->|"tasks and events, JSON"| CMD
     ICS -.->|"HTTPS, read-only"| FETCH
@@ -45,16 +53,17 @@ flowchart LR
 | Layer | Where | Its job | It never |
 | --- | --- | --- | --- |
 | UI | `src/pet`, `src/panel` | Draw the state, send button presses | Keeps state of its own |
-| Rust core | `src-tauri/src/` (`lib.rs` and seven modules) | Windows, database, tick, passing messages | Decides timer, streak or parsing rules |
-| Python sidecar | `backend/main.py` | Timer and streak rules, quick-add parsing | Touches the database or the network |
+| Rust core | `src-tauri/src/` (`lib.rs` and ten modules) | Windows, database, tick, the front-app monitor, the extension's socket, passing messages | Decides timer, streak, parsing or mode rules |
+| Python sidecar | `backend/main.py` | Timer and streak rules, quick-add parsing, mode labels | Touches the database or the network |
 | Task fetcher | `backend/fetcher.py`, `backend/feeds.py` | Downloads the saved feeds, reads uploaded .ics files, and turns both into tasks and events; started for each sync, then exits | Touches the database, writes anywhere, or shows a feed address |
+| Chrome extension | `extension/` | Asks once per site, and sends the address and title of an allowed page in front every 5 s | Keeps what it sends, or sends anything while the app is closed |
 
-**The database** has six tables.
+**The database** has ten tables.
 
 | Table | Holds | Used yet |
 | --- | --- | --- |
 | `preset` | Saved focus and break lengths | Yes |
-| `session` | Finished focus blocks, each with an optional `task_id` | Yes; `task_id` is not filled in yet |
+| `session` | Finished focus blocks, each with an optional `task_id` | Yes; `task_id` is set when a block is started for a task |
 | `setting` | The streak goal, whether sounds are on, the feed addresses or uploaded .ics files, and each feed's last sync result | Yes |
 | `task` | Typed and imported tasks: title, course, due, estimate, status, and `hidden_at` for an imported task the user deleted | Yes |
 | `task_source_link` | Which imported item a task came from; `(source, source_uid)` is unique so a re-import cannot duplicate; `removed_at` marks one that left its feed | Yes |
@@ -66,11 +75,13 @@ flowchart LR
 
 ### How the layers talk
 
-- **UI to Rust:** `invoke("command_name", args)`. The commands are `timer`, `streak`, `day`, `list_presets`, `add_preset`, `delete_preset`, `set_streak_threshold`, `sounds`, `merge_task`, `list_courses`, `set_course`, `connect_google`, `add_task`, `list_tasks`, `set_task_done`, `delete_task`, `feeds`, `set_feed`, `set_feed_file`, `sync_now`, `list_events` and `toggle_panel`.
-- **Rust to UI:** `timer` and `streak` events, sent to both windows at once. This is why the pet and the panel always agree. A third event, `tasks`, carries no data: it is sent after each feed sync, and the panel reloads its tasks, schedule and feed status. After its own changes the panel just reloads.
+- **UI to Rust:** `invoke("command_name", args)`. The commands are `timer`, `streak`, `day`, `list_presets`, `add_preset`, `delete_preset`, `set_streak_threshold`, `sounds`, `merge_task`, `list_courses`, `set_course`, `connect_google`, `add_task`, `list_tasks`, `set_task_done`, `delete_task`, `feeds`, `set_feed`, `set_feed_file`, `sync_now`, `list_events`, `toggle_panel`, `modes_today`, `declared_mode`, `learned`, `site_time`, `app_time` and `accessibility`. The last three are compiled only where they work: `site_time` on Unix, the other two on macOS.
+- **Rust to UI:** `timer` and `streak` events, sent to both windows at once. This is why the pet and the panel always agree. A third event, `tasks`, carries no data: it is sent after each feed sync, and the panel reloads its tasks, schedule and feed status. After its own changes the panel just reloads. A fourth, `reminder`, carries one line of text for the pet's bubble: a task due soon, "Did you submit it?", or a question about an app or site the pet does not recognize.
 - **Sounds:** the tick thread in `run` (`lib.rs`) compares each new timer state with the last one it rang for. A break that starts plays Glass, and each call back plays Ping, through `afplay` (macOS only). No window is involved, so it works with the panel closed and the pet hidden.
-- **Rust to the sidecar:** one line of JSON in, one line out: `{"method": "timer", "params": {...}}` returns `{"ok": ...}` or `{"error": ...}`.
-- **Rust to the fetcher:** one JSON object in on stdin, `{"feeds": {"canvas": address, ...}, "files": {"google": ics text, ...}, "accounts": {"google": client and refresh token}}` (or `{"connect": {"google": client}}` to sign in), and one out, with `{"ok": [items]}` or `{"error": "..."}` for each source. The process then exits.
+- **Rust to the sidecar:** one line of JSON in, one line out: `{"method": "timer", "params": {...}}` returns `{"ok": ...}` or `{"error": ...}`. The methods are `ping`, `timer`, `streak`, `quick_add` and `modes`. An error a method raises is passed back to the caller and the process stays, because the running timer lives in it; the process is replaced only when the pipe or the reply is broken (`sidecar_call`, `sidecar.rs`). The UI cannot name a sidecar method: each one is reached through its own Rust command.
+- **Rust to the fetcher:** one JSON object in on stdin, `{"feeds": {"canvas": address, ...}, "files": {"google": ics text, ...}, "accounts": {"google": client and refresh token}}` (or `{"connect": {"google": client}}` to sign in), and one out, with `{"ok": [items]}` or `{"error": "..."}` for each source. A crash while reading one source is that source's error, so the others still sync. The process then exits.
+- **The Chrome extension to Rust:** native messaging. Chrome starts a two-line host script (`chrome-host.sh`, written beside `pet.db` at launch) that passes the extension's messages to a Unix socket (`ext.sock`) the app listens on. The host is named after the app's identifier, so the dev and the everyday app each have one; the extension tries the everyday app first. Each message is `{"url", "title"}` for the allowed page in front.
+- **Locks:** the database connection, the sidecar and the sync each sit behind one lock. The database and sync locks are taken with `lock` in `db.rs`, which carries on after a thread has panicked while holding one; the sidecar's lock does the same and starts a fresh process.
 
 ### One example: a focus block, start to finish
 
@@ -135,6 +146,16 @@ What `sync_feed` does with a source's items:
 
 Deleting an imported task in the panel sets `hidden_at` instead of removing the row, so the link survives and the next sync does not import it again.
 
+### A fourth example: where the time went
+
+Nothing here is on the screen path of the timer; it runs beside it.
+
+1. **Every 5 seconds** the monitor thread (`monitor.rs`) asks macOS for the app in front. The sample passes the privacy gate first: an app on the built-in list, or one the user made Private, is kept as "Private" with no name or bundle ID. Samples of the same app join into one `app_span` row.
+2. **Every 5 seconds** the extension sends the address and title of the page in front, if the user said yes for that site. `browser.rs` drops a site the user made Private in the app, and joins samples of the same address into one `activity_span` row.
+3. **During a break** both are dropped (C-4): the tick thread sets a flag, `PAUSED`, that both check.
+4. **When asked** (`modes_today`), Rust sends today's rows from both tables, the focus blocks, the declarations and the learned rules to `label_day` in `backend/modes.py`. It returns the labeled stretches, the seconds per mode, and the apps and sites nothing recognizes. Labels are not stored.
+5. **Once a minute**, outside a focus block and when no task reminder is due, the tick thread takes the first unknown the pet has not asked about, marks it in `app_rule`, and sends it as a `reminder` event. The panel lists every open question; an answer is a row in `app_rule`.
+
 ### The windows and macOS Spaces
 
 The pet is set in `tauri.conf.json` to show on every Space, so it follows the user between desktops. The panel is a normal window that lives on one Space at a time; at startup Rust sets its AppKit collection behavior to move to the active Space (`move_to_active_space` in `windows.rs`, macOS only), so a click on the pet opens the panel where the user is. This is the one place the core calls AppKit directly, through `objc2-app-kit`.
@@ -176,10 +197,10 @@ Read it as two separate paths that only meet at the pet window:
 | Timer and streak | 1 | Sessions, breaks, daily goal | Python | Standard library |
 | Task service | 2 | The pet's own list; merges and dedupes imports; builds Today | Rust + Python | SQLite |
 | Task fetcher | 2, 6 | Reads Canvas, calendars, notes and email. Canvas and calendar ICS feeds are built | Its own process | `icalendar`, read-only APIs |
-| Window monitor | 3 | Reads the front app, title and URL every 5 s | Rust + browser extension | NSWorkspace, Accessibility API |
-| Privacy gate | 3 | Stops Private windows before anything else sees them | Rust | Rules in the `app_rule` table |
-| Mode classifier | 3 | Labels time as Study, Work, Relax or Private | Python | Rules, no model |
-| Focus keeper | 3 | Notices drift and escalates gently | Python | Rules, no model |
+| Window monitor | 3 | Reads the front app, title and URL every 5 s. The app's name and the page's address and title are built; the window title is not read yet | Rust + browser extension | NSWorkspace, Accessibility API |
+| Privacy gate | 3 | Stops Private windows before anything else sees them. Built for apps and sites; not for private windows inside an ordinary app | Rust | A built-in list, and rules in the `app_rule` table |
+| Mode classifier | 3 | Labels time as Study, Work, Relax or Private. Built | Python | Rules, no model |
+| Focus keeper | 3 | Notices drift and escalates gently. Not built | Python | Rules, no model |
 | Capture worker | 4 | Saves text and low-res frames from Study windows | Rust + Python | ScreenCaptureKit, PyMuPDF, OCR |
 | Encrypted store | 4 | The same database, now encrypted | Rust | SQLCipher, sqlite-vec |
 | Wrap-up builders | 4, 5 | Timelapse, then the knowledge graph | Its own Python process | ffmpeg, Ollama or llama.cpp |
@@ -188,7 +209,7 @@ Each part plugs into the Phase 1 shape: things that watch or store go in Rust, t
 
 ### Processes
 
-By the end there are four processes, split by what each is allowed to do. The first, second and fourth exist today:
+By the end there are four processes, split by what each is allowed to do. The first, second and fourth exist today. Chrome also starts the extension's host script, which only passes bytes to the app's socket and ends when the app quits:
 
 | Process | Network | Runs |
 | --- | --- | --- |

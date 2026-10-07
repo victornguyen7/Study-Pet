@@ -14,6 +14,16 @@
 - Privacy gate for apps (PR-1): password managers, chat and mail apps on a built-in list are recorded as "Private", with no name or bundle ID.
 - Mode classifier (`backend/modes.py`): labels today's app and page spans Study, Work, Relax or Private, from the user's declaration, a learned rule, the app or site category, then a running focus block; a stretch under 3 minutes keeps the label it interrupts. New table `mode_declaration`, commands `modes_today` and `declared_mode`, and a "Right now I'm" picker in the Today view.
 - Ask once and remember (PR-2): the pet asks what an unrecognized app or site is for, once, and the Today view lists the open questions with Study, Work, Relax and Private buttons. New table `app_rule` and command `learned`; "What the pet has learned" in Settings lists the answers. A Private answer renames the app's past spans to "Private", deletes the site's recorded pages, and keeps new ones out.
+- The everyday app in `/Applications` was rebuilt and reinstalled on 2026-10-07 with everything here; its database gained the four new tables.
+
+**Fixed**
+- An error from the Python sidecar no longer throws away the running focus block. Any error, such as quick add's "a task needs a title", used to replace the process, and the timer lives in it. The process is now replaced only when the pipe or the reply is broken.
+- A crash while reading one feed no longer fails every feed. It is that source's own error and shows only the kind of error ("the task fetcher failed: KeyError"), never Python's own message.
+- A panic while a lock is held no longer makes every later call panic. The database and sync locks go through `lock` in `db.rs`; the sidecar's lock starts a fresh Python process.
+- The dev and the everyday app no longer take the Chrome extension from each other. Each has its own native-messaging host, named after its identifier, and the extension (0.2.1) tries the everyday app first, then the dev build.
+
+**Removed**
+- The `backend_call` command, which let a window call any sidecar method with any arguments. Nothing used it.
 
 ## 0.2.0 · Phase 2, in progress
 

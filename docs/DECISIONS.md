@@ -26,10 +26,10 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 - **Gave up:** nothing so far.
 - **Revisit when:** a module grows past what one screen of headings can show.
 
-### The Rust core is eight files, split by what the code is about
-- **Why:** `lib.rs` had reached 1,810 lines, and the Phase 3 window monitor would have added to it. On 2026-10-07 it was cut into modules with no change in behavior: `db.rs` (the store, presets, sessions, day totals, `setting`), `sidecar.rs`, `session.rs` (timer, sounds, streak), `tasks.rs`, `feeds.rs` (imports, Google sign-in, the fetcher, today's events), `keychain.rs` and `windows.rs`. `lib.rs` keeps `run()`, which starts the threads and lists every command, and the tests.
+### The Rust core is eleven files, split by what the code is about
+- **Why:** `lib.rs` had reached 1,810 lines, and the Phase 3 window monitor would have added to it. On 2026-10-07 it was cut into modules with no change in behavior: `db.rs` (the store, presets, sessions, day totals, `setting`), `sidecar.rs`, `session.rs` (timer, sounds, streak), `tasks.rs`, `feeds.rs` (imports, Google sign-in, the fetcher, today's events), `keychain.rs` and `windows.rs`. `lib.rs` keeps `run()`, which starts the threads and lists every command, and the tests. Phase 3 added three the same day: `browser.rs` (the extension's socket and `activity_span`), `monitor.rs` (the front app, the privacy gate, the Accessibility permission) and `modes.rs` (declarations, learned rules, the classifier's input).
 - **Detail:** items shared between files are `pub(crate)`. A command is listed in `generate_handler!` by its path, such as `tasks::add_task`. This file names code by file and function, never by line number, so the references survive edits.
-- **Gave up:** the tests are still one module in `lib.rs` (about 490 lines) that imports from every file, so many helpers are `pub(crate)` only for them.
+- **Gave up:** the tests are still one module in `lib.rs` (about 640 lines) that imports from every file, so many helpers are `pub(crate)` only for them.
 - **Revisit when:** a test is next touched (move it beside its code), or `feeds.rs` (about 440 lines) grows with the next source.
 
 ### Python sidecar for logic
@@ -55,12 +55,15 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ### No content security policy (`csp: null`)
 - **Why:** the scaffold default; the app only loads its own bundled pages.
 - **Gave up:** a layer of defense if a page ever renders untrusted content.
+- **Detail:** checked on 2026-10-07, when page titles and app names from outside began to be shown: nothing in `src/` or `extension/` uses `innerHTML` or `eval`; all text is set with `textContent`. That habit is what stands in for the policy.
 - **Revisit when:** anything remote is loaded or captured page text is shown (Phase 4).
 
 ## Phase 1 · Sidecar
 
 ### JSON lines over stdin/stdout, one process behind one lock
-- **Why:** the simplest protocol that works: one request line, one reply line, no ports and no network. The process starts on first use and is respawned after an error (`sidecar_call`, `sidecar.rs`).
+- **Why:** the simplest protocol that works: one request line, one reply line, no ports and no network. The process starts on first use (`sidecar_call`, `sidecar.rs`).
+- **Detail:** changed on 2026-10-07. The process used to be replaced after any error, including one a method raised, such as quick add's "a task needs a title". The timer's state is in that process, so an ordinary error lost the running focus block. Now a raised error is passed back and the process stays; it is replaced only when the pipe or the reply is broken. If a thread panics in the middle of a call, the next call also starts a fresh process, since the pipe may hold half a reply.
+- **Detail:** the window cannot name a sidecar method. The `backend_call` command that allowed it was removed on 2026-10-07; nothing used it. Each method is reached through a Rust command of its own.
 - **Gave up:** calls are serialized, so a long job would stall the timer tick.
 - **Revisit when:** Phase 5 adds graph building; give long jobs their own process.
 
@@ -72,6 +75,12 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ### Python logic takes `now` as an argument
 - **Why:** `Timer` and `streak` never read the clock themselves, so tests can fake time (`backend/tests/`).
 - **Gave up:** nothing.
+
+### A lock carries on after a panic
+- **Why:** added on 2026-10-07. Every lock was taken with `.lock().unwrap()`, 38 places by then, so one panic while a lock was held made every later call panic until restart. Phase 3 added three kinds of thread that take the database lock (the front-app sampler, the extension's socket, one per extension connection). `lock` in `db.rs` takes the lock whether or not it was poisoned.
+- **Detail:** this is safe for the database because each use is one statement or one transaction, and a transaction that is dropped rolls back. The sync lock guards nothing but "one at a time". The sidecar's lock is the exception described above.
+- **Gave up:** a panic is no longer loud. It still ends the thread it happens in: one in the once-a-second tick thread stops the timer until restart.
+- **Revisit when:** a panic is ever seen; the tick thread could then be restarted, or the app could say so.
 
 ## Phase 1 · Timer
 
@@ -306,6 +315,12 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Why:** the spec asks for events "as a timeline without checkboxes". A list of times and titles, all-day first, is that with no layout code; the section is hidden when there are no events (`events_today`, `feeds.rs`).
 - **Gave up:** no hour grid, no "now" marker, and a timed event that began yesterday and runs past midnight is not shown.
 
+### A crash in one source is that source's own error
+- **Why:** added on 2026-10-07. `run` in `backend/fetcher.py` caught only the errors it had worded itself. Anything else, such as a reply from Google without a token, ended the whole fetcher: every feed failed, and Settings showed the last line of Python's error unfiltered.
+- **Detail:** an unexpected error now becomes "the task fetcher failed: " and the kind of error, such as `KeyError`. The kind is safe to show; the message is not, since it could hold an address.
+- **Gave up:** the message that would say what went wrong. A crash before any source is read (a missing package) still shows Python's last line, which is how a fresh checkout learns it needs `pip install`.
+- **Revisit when:** such an error is seen and cannot be explained from its kind alone; run the fetcher by hand then.
+
 ## Phase 2 · Look
 
 ### The pet is two static SVG pictures, swapped by a CSS class
@@ -356,8 +371,9 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 ### The Chrome extension came first, and it talks to the app by native messaging
 - **Why:** chosen on 2026-10-07. The front-app monitor was built and removed the same day; recording pages in Chrome was wanted first. Native messaging over a local port: no port is open for other software to reach, and Chrome only lets the listed extension ID start the host.
 - **Detail:** Chrome starts the host as its own process, so the host is a two-line script (`chrome-host.sh`, written beside `pet.db` at launch) that runs `nc -U` on a Unix socket the app listens on (`ext.sock`). The app also writes the host manifest into Chrome's `NativeMessagingHosts` folder. The extension's ID is fixed by the `key` in `extension/manifest.json`; its private half was thrown away, since only the ID matters for an unpacked extension.
-- **Gave up:** Chrome only (Edge needs one more manifest). The dev and the everyday app would share one host name, so Chrome talks to whichever started last. Any program running as the user can write made-up pages to the socket.
-- **Revisit when:** the everyday app gets this build, or the extension goes to the Chrome Web Store (which assigns its own ID).
+- **Gave up:** Chrome only (Edge needs one more manifest). Any program running as the user can write made-up pages to the socket.
+- **Detail:** changed on 2026-10-07, once the everyday app had this build and the shared host name had become real. The host is now named after the app's identifier (`com.hiennguyen.pet`, or `com.hiennguyen.pet.dev` for the dev build), so each app writes its own manifest. The extension tries them in that order and moves on when a host ends without saying hello, so the everyday app gets the pages whenever it is running. One extension serves both; a second extension ID was not needed.
+- **Revisit when:** the extension goes to the Chrome Web Store (which assigns its own ID), or the dev build needs pages while the everyday app is open.
 
 ### Recorded pages live in the app, never in Chrome
 - **Why:** Chrome's storage would keep recording with the pet closed, against "eyes open means watching" (PR-3), is capped at about 10 MB, and would be a second place for the data panel (PR-8) to cover. With the app closed the host cannot reach the socket, the extension gets no hello, and nothing is sent or asked.
@@ -365,7 +381,7 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** time on an allowed page while the app is closed is lost.
 - **Revisit when:** the data panel is built.
 
-### The extension asks on every page and remembers nothing
+### The extension asks on every page and remembers nothing (replaced 2026-10-07, see the last entry)
 - **Why:** asked for on 2026-10-07, the same day a once-per-site version with a remembered list was built and replaced. There is no list of sites anywhere, typed or learned. A yes covers one page in one tab, held in `chrome.storage.session` until the tab goes to another address or Chrome closes; that answer is the privacy gate for pages, so a page with no yes is never sent.
 - **Detail:** a page that changes its address without loading again (the next video on YouTube) is told to ask again, through `tabs.onUpdated`. A change of `#fragment` alone is the same page.
 - **Detail:** a page with no answer is also asked when its tab comes to the front or the app connects, which covers tabs opened before the extension was loaded (the banner script is put in with `chrome.scripting`, hence the `scripting` and host permissions). A no is held the same way as a yes, so switching back does not ask again; reloading the same address keeps the answer.
@@ -393,20 +409,21 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Why:** built on 2026-10-07. The gate runs on each front-app sample before it reaches the database (PR-1), so a Private app's name is never stored and then removed. The spec says both "labeled by app name only" and "only private time, N minutes" for Private; the stricter one was taken, so all Private apps share one "Private" row.
 - **Detail:** the list is `PRIVATE_APPS` in `monitor.rs`, matched by bundle ID: password managers, messaging and mail. For pages the gate is the extension's question on every page.
 - **Gave up:** an app that is not on the list is named. Banking is on the web, where the page question covers it. Incognito windows and screens with a password field cannot be told from an app's name. Slack and Discord count as Private even when used for a course.
-- **Revisit when:** "ask once and remember" adds the user's own answers in `app_rule`, which should be checked before the list; and when window titles are read.
+- **Detail:** the user's own Private answers came the same day ("The pet asks what an app is for", below). The monitor checks `app_rule` on every sample, after the built-in list, and `browser.rs` checks it for every page.
+- **Revisit when:** window titles are read.
 
 ### Modes are worked out when asked for, not stored on the spans
 - **Why:** built on 2026-10-07. `app_span` and `activity_span` keep what was seen; `modes_today` sends today's rows to `label_day` in `backend/modes.py`, which labels and smooths them. A new rule or a corrected category then relabels the whole day with nothing to migrate.
 - **Detail:** signals in order: a Private app from the gate, the declaration, a learned rule, the category, then a running or finished focus block (Study). A page wins over the browser it is in. Spans are cut where a focus block or a declaration starts or ends. A stretch under 3 minutes, or one nothing recognizes, takes the label before it; declared and Private time is never relabeled, and nothing carries across a gap of more than 15 seconds.
 - **Detail:** the declaration is a picker in the Today view, kept in `mode_declaration`. It lasts until it is changed.
-- **Gave up:** the spec's `mode`, `tier` and `label source` columns on the span. No rule is learned yet (the classifier takes them, nothing writes them). The category list is short and fixed in code; YouTube is on neither side, so it is unknown unless a focus block runs. A tagged task and a calendar class are not used as context. "Relax" left on overnight labels the next morning too.
+- **Gave up:** the spec's `mode`, `tier` and `label source` columns on the span. Rules were not learned at first; they came the same day (next entry). The category list is short and fixed in code; YouTube is on neither side, so it is unknown unless a focus block runs. A tagged task and a calendar class are not used as context. "Relax" left on overnight labels the next morning too.
 - **Revisit when:** "ask once and remember" (learned rules), the time balance (the first screen to show labels), and the gate's test day, which will show what the category list is missing.
 
 ### The pet asks what an app is for after it has seen it, and the answer is given in the panel
 - **Why:** built on 2026-10-07. The spec asks "Can I look at this?" the first time an app appears (PR-2). Here the question is "what is it for?", and it comes once the app or site has had 3 minutes in front in a day, so a passing window is never asked about. The bubble cannot be clicked yet, so it only points to the panel, where the Today view holds the buttons.
 - **Detail:** `label_day` returns the unknowns: no rule, no category, not a browser, not Private. `take_question` marks one as asked in `app_rule` (a row with no mode) and the pet says it once, when no reminder is due and no focus block runs. The panel lists every open question until it is answered.
 - **Detail:** a rule's key is the site, or the app's bundle ID in lower case (its name if it has none). A Private answer goes through the gate from then on, and takes the name off what was stored: the app's spans become "Private", the site's pages are deleted.
-- **Gave up:** an app is named in `app_span` before the user has said anything about it, which is Neutral in the spec, not the stricter "ask first". A rule covers one exact site, not its subdomains. Forgetting a Private rule does not bring the old names back. The extension still asks on every page, even for a site with a rule.
+- **Gave up:** an app is named in `app_span` before the user has said anything about it, which is Neutral in the spec, not the stricter "ask first". A rule covers one exact site, not its subdomains. Forgetting a Private rule does not bring the old names back. The extension keeps its own yes or no per site, apart from these rules (last entry).
 - **Revisit when:** the bubble can be clicked (answer in place), and when the extension's per-page question is replaced by these rules.
 
 ### The extension asks once per site and remembers, replacing "asks on every page"

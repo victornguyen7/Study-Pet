@@ -86,7 +86,7 @@ flowchart TD
 - [x] Upload an exported .ics file where a calendar has no address
 - [x] Pixel-slime pet with closed and open eyes, shown in the panel and as the app icon
 - [x] Look at the new pet in the real window: focus block (eyes open), call back (hop), a milestone star
-- [x] Rebuild and reinstall the everyday app so it gets the new pet and icon (done 2026-10-04 and again on 2026-10-05 from commit `c90c6af`; do it again after any change it should get, and back up its `pet.db` first)
+- [x] Rebuild and reinstall the everyday app so it gets the new pet and icon (done 2026-10-04, on 2026-10-05 from commit `c90c6af`, and three times on 2026-10-07, the last with the Phase 3 work so far; do it again after any change it should get, and back up its `pet.db` first)
 - [x] Commit the new pet, icon and docs; the installed app was built from uncommitted files
 - [x] Set the version to 0.2.0 in `package.json`, `Cargo.toml` and both Tauri configs
 - [x] Wake-up splash from the logo design (optional; in `pet.css`, not yet looked at in the real window)
@@ -110,7 +110,7 @@ flowchart TD
 
 **Gate:** one week with no other to-do app opened.
 
-## Phase 3 · Focus keeper and modes
+## Phase 3 · Focus keeper and modes (in progress)
 
 **Builds:** the window monitor, the privacy gate, the mode classifier and the drift ladder. Nothing on screen is stored yet, only app names and time.
 
@@ -124,7 +124,7 @@ flowchart TD
 - The pet offers to start a session when it sees study with none running (S-7).
 - Front app, title and URL read every 5 s; capture pauses on breaks and in Relax (C-1 to C-4).
 
-**Uses:** NSWorkspace and the Accessibility API from Rust, a Chrome or Edge extension for the URL and YouTube player state, new `activity_span` and `app_rule` tables, rules only (no model) to stay under 5% CPU.
+**Uses:** NSWorkspace and the Accessibility API from Rust, a Chrome or Edge extension for the URL and YouTube player state, new `activity_span`, `app_span`, `app_rule` and `mode_declaration` tables, rules only (no model) to stay under 5% CPU.
 
 **Tasks**
 - [x] Split `lib.rs` into modules before the monitor adds to it (no change in behavior; run the app once to confirm)
@@ -140,7 +140,8 @@ flowchart TD
 - [x] Mode classifier: declaration, learned rule, app category, context (`backend/modes.py`, with tests): today's app and page spans are labeled Study, Work, Relax or Private, with 3-minute smoothing; a "Right now I'm" picker in Today is the declaration; the command `modes_today` returns the labeled stretches and the seconds per mode (2026-10-07; nothing on screen shows the labels yet, and the picker has not been tried in the running app). No rule is learned yet, the category list is short, and context is a focus block only
 - [x] Ask once and remember the answer (PR-2): an app or site nothing recognizes, in front for 3 minutes in a day, is brought up once in the pet's bubble and listed in Today under "What are these for?" with Study, Work, Relax and Private buttons. Answers are kept in `app_rule`, used by the classifier and the gate, and listed in Settings with a Forget button (2026-10-07; tested with made-up spans, not yet tried in the running app)
 - [x] The extension asks once per site and remembers the answer, in place of asking on every page: a yes or no is kept in Chrome's storage by site, and the extension's popup lists every answered site with a Yes/No switch and a Forget button (2026-10-07; syntax-checked only, reload the extension in Chrome to try it)
-- [ ] Reload the extension and try it: one question per site, none on the next page or in a new tab; in the popup, switching a site to No stops its pages being noted, and Forget brings the question back
+- [x] Reload the extension and try it: one question per site, none on the next page or in a new tab; in the popup, switching a site to No stops its pages being noted, and Forget brings the question back
+- [x] Clean-up before the drift ladder, from a review of `KNOWN_ISSUES.md` on 2026-10-07: a sidecar error no longer loses the running focus block, a crash in one feed no longer fails the others, a panic while a lock is held no longer breaks every later call, and the unused `backend_call` command is gone (items 3, 22 and 52; tests pass, not yet watched in the running app)
 - [ ] Drift rules and the four-step ladder
 - [ ] Background-audio rules and the 60-second grace period
 - [ ] Pet states: Relaxing, Headphones, Nudging, Happy
