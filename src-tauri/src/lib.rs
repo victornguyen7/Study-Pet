@@ -297,6 +297,34 @@ fn timer(app: AppHandle, params: Value) -> Result<Value, String> {
     timer_action(&app, params)
 }
 
+// ---- Sounds: a macOS system sound when a break starts and when the pet calls the user back ----
+
+fn play_sound(app: &AppHandle, name: &str) {
+    let off = setting(&app.state::<Db>().0.lock().unwrap(), "sounds").ok().flatten().as_deref() == Some("0");
+    if off {
+        return;
+    }
+    let file = format!("/System/Library/Sounds/{name}.aiff");
+    // its own thread: afplay runs for as long as the sound, and the timer must keep ticking
+    std::thread::spawn(move || {
+        if let Err(e) = std::process::Command::new("afplay").arg(file).status() {
+            eprintln!("sound failed: {e}");
+        }
+    });
+}
+
+/// Whether sounds are on. Pass `on` to change it.
+#[tauri::command(async)]
+fn sounds(app: AppHandle, on: Option<bool>) -> Result<bool, String> {
+    let db = app.state::<Db>();
+    let conn = db.0.lock().unwrap();
+    if let Some(on) = on {
+        conn.execute("INSERT OR REPLACE INTO setting (key, value) VALUES ('sounds', ?1)", [if on { "1" } else { "0" }])
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(setting(&conn, "sounds").map_err(|e| e.to_string())?.as_deref() != Some("0"))
+}
+
 // ---- Streak: logic in backend/streaks.py ----
 
 /// Computes the streak and broadcasts it to every window as a "streak" event.
@@ -1182,11 +1210,24 @@ pub fn run() {
             // drive the timer once a second; every window hears the new state as a "timer" event
             let handle = app.handle().clone();
             std::thread::spawn(move || {
+                let mut rang = json!(null); // the [phase, calls] a sound was last played for
                 for second in 1u64.. {
                     std::thread::sleep(std::time::Duration::from_secs(1));
                     let state = timer_action(&handle, json!({ "action": "tick" }));
                     if let Err(e) = &state {
                         eprintln!("timer tick failed: {e}");
+                    }
+                    // a break that starts, and each time the pet calls the user back from one
+                    if let Ok(s) = &state {
+                        let key = json!([s["phase"], s["calls"]]);
+                        if key != rang {
+                            match s["phase"].as_str() {
+                                Some("break") => play_sound(&handle, "Glass"),
+                                Some("callback") => play_sound(&handle, "Ping"),
+                                _ => {}
+                            }
+                            rang = key;
+                        }
                     }
                     // once a minute, so "today" rolls over at midnight while the pet stays open
                     if second % 60 == 0 {
@@ -1262,6 +1303,7 @@ pub fn run() {
             timer,
             streak,
             set_streak_threshold,
+            sounds,
             add_task,
             list_tasks,
             set_task_done,

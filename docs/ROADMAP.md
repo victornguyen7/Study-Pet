@@ -100,6 +100,10 @@ flowchart TD
 - [x] Task reminders: the pet speaks up when the time left until a task is due falls under twice the work left (estimate less time spent; 1 hour assumed with no estimate). Once a day per task, never during a focus block, and the task's row is marked "start soon"
 - [ ] Later: hold reminders for the next break with the spec's "unless due within 2 hours" rule, and the morning brief
 - [x] "Did you submit it?": once a Canvas task's due time has passed, the pet asks once (not during a focus block), and the task's row has a "Did you submit it? Yes" button that checks it off. This stands in for Canvas submission status, which needs an API token the school does not give out
+- [x] A sound when a break starts and when the pet calls you back, with a checkbox in Settings to turn it off (macOS system sounds)
+- [x] Streak section in the Today view with a pixel fire, in place of the one-line streak text
+- [x] Panel enlarged to 1000 × 700
+- [ ] Hear the sounds at a real break, and look at the streak section and the wider panel in the running app (`KNOWN_ISSUES.md`, items 47 and 49)
 
 **Decided:** `icalendar` with `recurring-ical-events` parses ICS. OAuth uses no library: the standard library covers the sign-in, and the `security` tool reaches the Keychain.
 

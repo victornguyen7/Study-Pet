@@ -404,6 +404,40 @@ form {
 
 /* ---- wrap up ---- */
 
+/* ---- streak: the fire is grey until today counts ---- */
+
+#streak {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+#streak > div {
+  flex: 1;
+}
+
+#streak strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+#streak-stars {
+  color: var(--star);
+}
+
+#streak progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  margin-top: 6px;
+  accent-color: var(--pond);
+}
+
+#fire.unlit {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
 #wrap-streak {
   margin-top: -12px;
 }

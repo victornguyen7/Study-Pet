@@ -307,11 +307,31 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** only the five icon files named in the Tauri configs are kept. The command also writes Windows Store, iOS and Android icons; those were deleted.
 - **Revisit when:** the Windows build starts (run the command again and keep what that platform needs).
 
+### The streak has its own section, with a hand-drawn pixel fire
+- **Why:** the streak was one sentence under "Today's focus blocks", easy to miss. It now sits right below the tank with the day count, milestone stars, a native `<progress>` bar for today's minutes against the goal, and the freezes left. Everything shown was already in the `streak` event, so only the panel changed.
+- **Detail:** the fire (`src/panel/fire.svg`) is a 13 x 16 grid in the slime's style: one-pixel rectangles and the same `#0A1230` outline. It is one picture; a CSS filter greys it until today counts. The stars use the same rule as the pet's (`[7, 30, 100]`), written a second time in `src/panel/main.ts`.
+- **Rejected:** the 🔥 emoji (does not match the pixel pet); a second, unlit picture (the filter does it in two lines).
+- **Gave up:** the fire does not grow or change with the length of the streak, and it is not animated.
+
+## Phase 2 · Sounds
+
+### Rust plays macOS system sounds with `afplay`
+- **Why:** a break that starts or ends is easy to miss when the user is looking at their work, not the pet. The tick thread already sees every timer state, so it plays `/System/Library/Sounds/Glass.aiff` when a break starts and `Ping.aiff` on each call back (`play_sound`, `lib.rs`). No dependency and no audio file to ship.
+- **Rejected:** playing audio in a window (macOS can block sound in a webview the user has not clicked, which is the pet's normal state); a Rust audio crate or the notification plugin (a dependency for two short sounds).
+- **Gave up:** macOS only; other platforms stay silent and log an error each time. No volume control or choice of sound: it follows the system volume. One checkbox in Settings turns both off (`sounds` in the `setting` table, on unless it is `0`).
+- **Detail:** the thread remembers the `[phase, calls]` it last rang for, so the second call back rings again and a user action between ticks cannot ring twice. After the laptop sleeps through a whole break, only the call back rings.
+- **Revisit when:** the Windows build starts, or Phase 3's background-audio rules need the pet to stay quiet in some modes.
+
 ## Phase 2 · Windows
 
 ### The pet shows on every Space
 - **Why:** a pet that stays behind on one desktop stops being a companion as soon as the user swipes to another. `visibleOnAllWorkspaces` on the pet window in both `tauri.conf.json` and `tauri.daily.conf.json` is one line of config.
 - **Gave up:** the pet cannot be parked on one desktop; the hide shortcut is the only way to get it out of view.
+
+### The panel is 1000 × 700, the size of a small browser window
+- **Why:** asked for on 2026-10-06, after 520 and 580 wide were tried and were still too narrow. The size is the `panel` window's `width` and `height` in `tauri.conf.json` and `tauri.daily.conf.json`.
+- **Gave up:** the layout is still one column drawn for 420 px, so the tank, the task rows and the streak bar stretch the full width (`KNOWN_ISSUES.md`, item 49).
+- **Revisit when:** the wide panel has been looked at; cap the content width, or put the tasks beside the tank.
 
 ### The panel moves to the active Space, through AppKit directly
 - **Why:** the panel is hidden, not closed, so macOS remembered the Space it was last on and a click on the pet threw the user back there. Setting `NSWindowCollectionBehavior::MoveToActiveSpace` once at startup makes it appear where the user is (`move_to_active_space`, `lib.rs:756`). Tauri has no config key for this behavior, so it is set on the `NSWindow` itself.

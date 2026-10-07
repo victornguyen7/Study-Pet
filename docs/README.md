@@ -1,6 +1,6 @@
 # Study Pet
 
-A desktop pet that keeps a student focused. It runs locally on a laptop: a small always-on-top pet that follows you across desktops, a focus timer with breaks, and a forgiving streak. A daily to-do list is being built now; later phases add focus nudges and an end-of-day knowledge graph.
+A desktop pet that keeps a student focused. It runs locally on a laptop: a small always-on-top pet that follows you across desktops, a focus timer with breaks and a sound when each one starts and ends, and a forgiving streak. A daily to-do list is being built now; later phases add focus nudges and an end-of-day knowledge graph.
 
 Phase 1 (pet, timer, streak) is built. Phase 2 (daily list) is in progress: you can add, check off and delete your own tasks, and import assignments from Canvas and events from a calendar feed. macOS first.
 

@@ -23,6 +23,9 @@
 - The panel opens on the Space you are on instead of pulling you back to the one it was last on (`move_to_active_space`, macOS only). New macOS-only dependency: `objc2-app-kit`.
 - The pet is a pixel slime: two pictures, eyes closed and eyes open (`src/pet/closed.svg`, `src/pet/open.svg`). It replaces the teal blob drawn in CSS. The eyes still open only during a focus block (P-2), and milestone stars now sit on the dark patch below the eyes.
 - The slime is shown at the left of the panel's view switcher.
+- Sounds: a macOS system sound when a break starts (Glass) and each time the pet calls you back (Ping), played by Rust with `afplay`. "Play a sound" in Settings turns them off (`sounds` command, `sounds` setting).
+- The panel is the size of a small browser window: 1000 × 700, up from 420 × 620.
+- Streak section in the panel's Today view, below the tank: a pixel fire (`src/panel/fire.svg`) that is grey until today counts, the day count, milestone stars, a bar for today's minutes against the daily goal, and the freezes left. It replaces the line under "Today's focus blocks".
 - App icon: the slime on a dark rounded tile, in place of the stock Tauri logo. Its source is `src-tauri/app-icon.svg`.
 - The installed everyday app ("Study Pet" in `/Applications`) was rebuilt from `tauri.daily.conf.json` and reinstalled on 2026-10-04, so it has the new pet and Dock icon. No migration ran; its database was already at schema version 3.
 - Wake-up splash on the pet at launch, from the logo design: the slime naps, blinks awake, then closes its eyes again (`src/pet/pet.css`, CSS only). The eyes are open for about 1.3 s with nothing being captured, a short exception to P-2. Skipped when the system asks for reduced motion. The design's full-screen backdrop and "Study Pet" wordmark are left out; the pet window is a small transparent overlay.

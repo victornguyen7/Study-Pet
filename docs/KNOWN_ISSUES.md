@@ -135,6 +135,13 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 35. **Only macOS icon needs are covered.** The Windows Store images and `icon.png` were deleted because no config named them. A Windows Store package, or any config that lists `icons/icon.png`, will fail to build until `npm run tauri icon src-tauri/app-icon.svg` is run again.
 36. **The version number lives in four places.** `package.json`, `Cargo.toml`, `tauri.conf.json` and `tauri.daily.conf.json` all say 0.2.0 now, matching the changelog, but each has to be changed by hand at the next bump.
     *Fix:* remove `"version"` from both Tauri configs so they fall back to `Cargo.toml`, leaving two places.
+47. **The break sounds and the streak section have not been tried in the running app.** Added 2026-10-06. The code type-checks, the Rust tests pass and both sound files play from a terminal, but nobody has yet heard a sound at a real break or looked at the new section in the panel, in light or dark mode.
+    *Fix:* run `npm run tauri dev`, start a 1-minute focus with a 1-minute break, and check both sounds, the "Play a sound" checkbox and the fire going from grey to lit. Look at the panel at its new size at the same time (item 49).
+48. **The sounds are macOS only and have no test.** `play_sound` runs `afplay` on a file under `/System/Library/Sounds`. On another platform every break logs "sound failed" and stays silent. The rule for when to ring lives in the tick thread, where no test reaches it.
+    *Fix:* at the Windows build, put the call behind `cfg(target_os = "macos")` and choose that platform's way to play a sound.
+49. **The panel is 1000 × 700 but its layout is still one narrow column.** Changed 2026-10-06 from 420 × 620. Nothing in `src/panel/panel.css` limits the content width, so every section stretches across the window. Not yet looked at in the running app.
+    *Cost if left:* long, thin rows with the text at one end and the buttons at the other.
+    *Fix:* give `main` a `max-width` and centre it, or lay Today out in two columns.
 
 ## Setup traps
 

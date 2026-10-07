@@ -54,6 +54,15 @@
         </div>
       </section>
 
+      <section id="streak">
+        <img id="fire" src="/src/panel/fire.svg" alt="" width="39" height="48" />
+        <div>
+          <p><strong id="streak-days"></strong> day streak <span id="streak-stars"></span></p>
+          <progress id="streak-progress" aria-label="Today's focus toward your daily goal"></progress>
+          <p id="streak-line" class="muted"></p>
+        </div>
+      </section>
+
       <section id="schedule" hidden>
         <h2>Today's schedule</h2>
         <ol id="events" class="rows"></ol>
@@ -78,7 +87,6 @@
       <section>
         <h2>Today's focus blocks</h2>
         <ol id="blocks" class="rows"></ol>
-        <p id="streak-line" class="muted"></p>
       </section>
     </main>
 
@@ -101,6 +109,10 @@
       <section>
         <h2>Streak</h2>
         <label>A day counts at <input id="threshold" type="number" min="1" max="1440" required /> min of focus</label>
+      </section>
+      <section>
+        <h2>Sounds</h2>
+        <label><input id="sounds" type="checkbox" /> Play a sound when a break starts and when it ends</label>
       </section>
       <section>
         <h2>Imports</h2>

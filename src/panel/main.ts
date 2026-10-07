@@ -415,6 +415,12 @@ threshold.onchange = () => {
     run(() => invoke("set_streak_threshold", { minutes: threshold.valueAsNumber }));
 };
 
+const sounds = $<HTMLInputElement>("sounds");
+sounds.onchange = () => run(() => invoke("sounds", { on: sounds.checked }));
+run(async () => {
+  sounds.checked = await invoke<boolean>("sounds");
+});
+
 const titles = { idle: "", focus: "Focus", break: "Break", callback: "Break's over" };
 const level = document.querySelector<HTMLElement>(".level")!;
 
@@ -439,7 +445,14 @@ async function loadDay(streak: StreakState) {
     ? "Today counts toward your streak."
     : `${plural(left, "more minute")} and today counts.`;
   const streakText = `${plural(streak.days, "day")} in a row`;
-  $("streak-line").textContent = `${streakText}. ${goal}`;
+  // the fire is lit once today counts; stars match the ones the pet wears
+  $("fire").classList.toggle("unlit", !streak.today_counted);
+  $("streak-days").textContent = String(streak.days);
+  $("streak-stars").textContent = "★".repeat([7, 30, 100].filter((m) => streak.days >= m).length);
+  const progress = $<HTMLProgressElement>("streak-progress");
+  progress.max = streak.threshold;
+  progress.value = Math.min(day.minutes[day.today] ?? 0, streak.threshold);
+  $("streak-line").textContent = `${goal} ${plural(streak.freezes_left, "freeze")} left this month.`;
 
   $("wrap-total").textContent = day.sessions.length
     ? `You focused for ${duration(day.minutes[day.today] ?? 0)} across ${plural(day.sessions.length, "block")} today.`
