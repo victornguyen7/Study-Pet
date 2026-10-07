@@ -25,6 +25,7 @@
 - The slime is shown at the left of the panel's view switcher.
 - Sounds: a macOS system sound when a break starts (Glass) and each time the pet calls you back (Ping), played by Rust with `afplay`. "Play a sound" in Settings turns them off (`sounds` command, `sounds` setting).
 - The panel is the size of a small browser window: 1000 × 700, up from 420 × 620.
+- "Sync now" in Settings says how it went: "Syncing…" while it runs, with the button disabled, then a green "✓ Synced at 3:42 PM", or in red which feed did not sync. A later automatic sync redraws the line, so it stays true.
 - Streak section in the panel's Today view, below the tank: a pixel fire (`src/panel/fire.svg`) that is grey until today counts, the day count, milestone stars, a bar for today's minutes against the daily goal, and the freezes left. It replaces the line under "Today's focus blocks".
 - App icon: the slime on a dark rounded tile, in place of the stock Tauri logo. Its source is `src-tauri/app-icon.svg`.
 - The installed everyday app ("Study Pet" in `/Applications`) was rebuilt from `tauri.daily.conf.json` and reinstalled on 2026-10-04, so it has the new pet and Dock icon. No migration ran; its database was already at schema version 3.
@@ -37,6 +38,7 @@
 - Courses in Settings: a checkbox for each course with open imported assignments. Unticking one hides its imported tasks; nothing is deleted. New commands `list_courses` and `set_course`.
 
 **Changed**
+- The Rust core is split into modules with no change in behavior: `lib.rs` (1,810 lines) became `lib.rs`, `db.rs`, `sidecar.rs`, `session.rs`, `tasks.rs`, `feeds.rs`, `keychain.rs` and `windows.rs`. Commands are listed by path in `generate_handler!`.
 - Feed addresses are kept in the macOS Keychain, not in `pet.db` (PR-4). The `setting` table holds only a marker. An address saved by an older build is moved at launch; if the move fails it stays where it is and still works. A marker with no Keychain item shows "the address is missing from the Keychain; paste it again" for that feed, and the other feeds still sync. Tried in the dev app on 2026-10-05: the real Canvas address moved and the next sync brought the same 54 assignments.
 - The version number is 0.2.0 in `package.json`, `Cargo.toml` and both Tauri configs (and the two lock files).
 - `backend/feeds.py` reads event times with `event.decoded("DTSTART")` instead of `event["DTSTART"].dt`. Same values; it only stops the editor's type checker from flagging the line.

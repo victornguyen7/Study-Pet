@@ -24,7 +24,13 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ### Rust core owns state, storage and windows
 - **Why:** one place holds the database, the one-second tick loop, both windows, the global shortcut and the event broadcast. Python never touches the database, and the UI never holds state.
 - **Gave up:** nothing so far.
-- **Revisit when:** `src-tauri/src/lib.rs` (one file, about 1,140 lines) gets hard to navigate.
+- **Revisit when:** a module grows past what one screen of headings can show.
+
+### The Rust core is eight files, split by what the code is about
+- **Why:** `lib.rs` had reached 1,810 lines, and the Phase 3 window monitor would have added to it. On 2026-10-07 it was cut into modules with no change in behavior: `db.rs` (the store, presets, sessions, day totals, `setting`), `sidecar.rs`, `session.rs` (timer, sounds, streak), `tasks.rs`, `feeds.rs` (imports, Google sign-in, the fetcher, today's events), `keychain.rs` and `windows.rs`. `lib.rs` keeps `run()`, which starts the threads and lists every command, and the tests.
+- **Detail:** items shared between files are `pub(crate)`. A command is listed in `generate_handler!` by its path, such as `tasks::add_task`. This file names code by file and function, never by line number, so the references survive edits.
+- **Gave up:** the tests are still one module in `lib.rs` (about 490 lines) that imports from every file, so many helpers are `pub(crate)` only for them.
+- **Revisit when:** a test is next touched (move it beside its code), or `feeds.rs` (about 440 lines) grows with the next source.
 
 ### Python sidecar for logic
 - **Why:** the spec wants extraction and graph jobs (PyMuPDF, a local model) in a process with no network access (PR-6). Timer and streak rules live there too, so all logic is in one language and easy to unit test.
@@ -34,11 +40,11 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ## Phase 1 · Windows
 
 ### Two windows; closing the panel only hides it
-- **Why:** the pet stays tiny and transparent, the panel is a normal window. Hiding instead of closing lets a click on the pet reopen it (P-3). See `lib.rs:852`.
+- **Why:** the pet stays tiny and transparent, the panel is a normal window. Hiding instead of closing lets a click on the pet reopen it (P-3). See `on_window_event` in `run` (`lib.rs`).
 - **Gave up:** nothing.
 
 ### Hide shortcut hardcoded to Alt+Shift+P
-- **Why:** P-1 asks for one shortcut; one constant is the least code (`lib.rs:827`).
+- **Why:** P-1 asks for one shortcut; one constant is the least code (set in `run`, `lib.rs`).
 - **Gave up:** it is not configurable and may clash with another app.
 - **Revisit when:** it clashes, or PR-3's "look away" shortcut is added.
 
@@ -54,12 +60,12 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ## Phase 1 · Sidecar
 
 ### JSON lines over stdin/stdout, one process behind one lock
-- **Why:** the simplest protocol that works: one request line, one reply line, no ports and no network. The process starts on first use and is respawned after an error (`lib.rs:204-258`).
+- **Why:** the simplest protocol that works: one request line, one reply line, no ports and no network. The process starts on first use and is respawned after an error (`sidecar_call`, `sidecar.rs`).
 - **Gave up:** calls are serialized, so a long job would stall the timer tick.
 - **Revisit when:** Phase 5 adds graph building; give long jobs their own process.
 
 ### Sidecar is started from the source tree
-- **Why:** fastest path for development: `backend/.venv/bin/python -m backend.main` (`lib.rs:220`).
+- **Why:** fastest path for development: `backend/.venv/bin/python -m backend.main` (`spawn_sidecar`, `sidecar.rs`).
 - **Gave up:** a release build cannot find Python, so the app only runs through `npm run tauri dev`.
 - **Revisit when:** building a distributable; freeze `backend/` with PyInstaller and ship it as `bundle.externalBin`.
 
@@ -88,20 +94,20 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 ### Plain SQLite, not encrypted
 - **Why:** Phase 1 stores only session times and presets, nothing sensitive.
 - **Gave up:** PR-4 (encryption at rest) is not met yet. Since Phase 2 this is no longer harmless: the database also holds the feed addresses, imported assignments and events, and any uploaded calendar file in full (`KNOWN_ISSUES.md`, items 1 and 2).
-- **Revisit when:** before any release build, and at the latest before Phase 4 stores captured text; switch rusqlite to `bundled-sqlcipher` with a key in the keychain (`lib.rs:17`).
+- **Revisit when:** before any release build, and at the latest before Phase 4 stores captured text; switch rusqlite to `bundled-sqlcipher` with a key in the keychain (`init_db`, `db.rs`).
 
 ### Dev database in the project root, release in the OS app data dir
-- **Why:** `pet.db` is easy to inspect during development (`lib.rs:783`). It is in `.gitignore`.
+- **Why:** `pet.db` is easy to inspect during development (`run`, `lib.rs`). It is in `.gitignore`.
 - **Gave up:** dev and release builds do not share data.
 - **Reviewed 2026-10-04:** sharing one file between the dev build and the installed everyday app was considered and turned down for now. The dev build would run unfinished migrations on real data with no way back, two running timers would count study time twice, and neither app sees the other's writes until it reloads.
 - **Revisit when:** real data is needed while developing. The smallest change is an opt-in `PET_DB` environment variable that overrides the path for one run.
 
 ### Schema changes through `PRAGMA user_version`
-- **Why:** a migration is one `if version < N` block, with no migration library (`lib.rs:70`).
+- **Why:** a migration is one `if version < N` block, with no migration library (`init_db`, `db.rs`).
 - **Gave up:** no down-migrations.
 
 ### Times stored as UTC text, days grouped by local time
-- **Why:** UTC is unambiguous in storage; the streak is about the user's own day (`lib.rs:159-190`).
+- **Why:** UTC is unambiguous in storage; the streak is about the user's own day (`streak_input` and `day_data`, `db.rs`).
 - **Gave up:** a block that crosses midnight counts wholly toward the day it started.
 - **Revisit when:** late-night sessions make a day's total look wrong.
 
@@ -190,7 +196,7 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Revisit when:** the app is signed (use a keychain library then), the app is shared with other people (the client must ship with it), or another calendar is wanted.
 
 ### A calendar with no address can be uploaded as an .ics file
-- **Why:** the first real Google account had no secret address to copy. Google Calendar can still export an .ics file, so each feed in Settings has an "Upload .ics" button. The panel reads the file and Rust stores its text in the `setting` table in place of an address (`save_feed_file`, `lib.rs:571`). Every sync hands that text to the fetcher again, which parses it with no download, so repeating events keep rolling into the 30-day window.
+- **Why:** the first real Google account had no secret address to copy. Google Calendar can still export an .ics file, so each feed in Settings has an "Upload .ics" button. The panel reads the file and Rust stores its text in the `setting` table in place of an address (`save_feed_file`, `feeds.rs`). Every sync hands that text to the fetcher again, which parses it with no download, so repeating events keep rolling into the 30-day window.
 - **Rejected:** parsing the file once at upload and keeping only the events; repeats past the first 30 days would never appear.
 - **Gave up:** a file is a snapshot. New or changed events do not arrive until the user exports and uploads again, and nothing warns that a file is old. The whole file, with every event's description and guest list, sits in `pet.db` as plain text, up to 5 MB. Google's export is a .zip, which the user has to unzip first.
 - **Revisit when:** uploading by hand gets tiresome; that is the point to build OAuth. (Built 2026-10-05.)
@@ -200,7 +206,7 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** the backend is no longer free of `pip install` (`backend/requirements.txt`, three pinned packages plus what they pull in). Only the fetcher imports them; the offline sidecar is still standard library only.
 
 ### The fetcher is a one-shot process that Rust starts for each sync
-- **Why:** PR-6 wants network access in its own process. `backend/fetcher.py` reads the addresses and any uploaded files on stdin, downloads and parses, prints one JSON reply and exits (`run_fetcher`, `lib.rs:618`). Nothing stays running, and the addresses never appear in `ps`.
+- **Why:** PR-6 wants network access in its own process. `backend/fetcher.py` reads the addresses and any uploaded files on stdin, downloads and parses, prints one JSON reply and exits (`run_fetcher`, `feeds.rs`). Nothing stays running, and the addresses never appear in `ps`.
 - **Gave up:** each sync pays a Python start-up (about 2 s with the download). There is no overall time limit on the process, only a 20 s limit per network operation.
 - **Revisit when:** a sync is seen to hang; kill the child after a fixed time.
 
@@ -209,7 +215,7 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** a third pinned package, and its list goes stale if it is never updated.
 
 ### Feed addresses are kept as plain text in the `setting` table (replaced 2026-10-05, see the next entry)
-- **Why:** the plan was the OS keychain. In a dev build the binary's signature changes on every rebuild, so macOS would ask for the login password on each one, and a release build cannot run Python yet, so the keychain path could not be tested at all. The address sits next to data that is already unencrypted (`feed_urls`, `lib.rs:536`).
+- **Why:** the plan was the OS keychain. In a dev build the binary's signature changes on every rebuild, so macOS would ask for the login password on each one, and a release build cannot run Python yet, so the keychain path could not be tested at all. The address sits next to data that is already unencrypted (`feed_urls`, `feeds.rs`).
 - **Gave up:** PR-4. Anyone who can read `pet.db` can read the calendars. The panel never shows an address back, and error messages are written so they cannot contain one.
 - **Revisit when:** before any release build, together with SQLCipher: move the addresses to the keychain with the `keyring` crate.
 
@@ -229,7 +235,7 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** a Google event such as "Essay due" is never a task. A Canvas address pasted into the Google box imports its assignments as events.
 
 ### A re-sync updates the task in place and never touches its status
-- **Why:** the spec's sync rules. `sync_feed` (`lib.rs:462`) finds the task through `(source, source_uid)`, overwrites the title, course and due that the source owns, and leaves `status` and `done_at` alone. It runs in one transaction and takes `now` as an argument so the test can fake time.
+- **Why:** the spec's sync rules. `sync_feed` (`feeds.rs`) finds the task through `(source, source_uid)`, overwrites the title, course and due that the source owns, and leaves `status` and `done_at` alone. It runs in one transaction and takes `now` as an argument so the test can fake time.
 - **Gave up:** an edit the user makes to an imported task's title or due date would be overwritten by the next sync (there is no edit yet).
 
 ### A task already past due when first seen is not imported
@@ -254,7 +260,7 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Revisit when:** the pet's bubble gets buttons.
 
 ### A reminder compares the time left with the work left
-- **Why:** decided 2026-10-05, from the spec's "timed by due date against the estimate, not by fixed alarms". A task is "due soon" when the time left is under twice the work left (`MARGIN`); the work left is the estimate less the focus time in sessions tied to the task. A task with no estimate is taken as 1 hour, because most imported tasks have none and would otherwise never be mentioned, and work left never goes below 15 minutes. A task due on a day, with no time, is due at the end of that day. The rule is two small functions in `lib.rs` (`work_left`, `due_soon`) and the text is built there too, so the pet only shows a string.
+- **Why:** decided 2026-10-05, from the spec's "timed by due date against the estimate, not by fixed alarms". A task is "due soon" when the time left is under twice the work left (`MARGIN`); the work left is the estimate less the focus time in sessions tied to the task. A task with no estimate is taken as 1 hour, because most imported tasks have none and would otherwise never be mentioned, and work left never goes below 15 minutes. A task due on a day, with no time, is due at the end of that day. The rule is two small functions in `tasks.rs` (`work_left`, `due_soon`) and the text is built there too, so the pet only shows a string.
 - **When it is said:** Rust checks once a minute and skips the check while a focus block runs. The task is left unmarked, so the first check after the block ends picks it up; no queue is kept. Each task is mentioned once a day.
 - **Rejected:** showing it mid-focus; a bubble-free mark only; 1.5 and 3 as the margin; never reminding about a task with no estimate.
 - **Gave up:** the spec's "held until the next break, unless the task is due within 2 hours": an urgent task still waits for the block to end. No morning brief. One bubble names one task and counts the rest.
@@ -272,11 +278,11 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** an assignment deleted at the source after its due date is never flagged. A valid but empty feed (the wrong account's address, a new term) flags every upcoming task until a good sync.
 
 ### A failed download stores nothing
-- **Why:** treating a failure as an empty feed would flag every upcoming task as removed. The fetcher reports an error per source, a page that is not a calendar is an error rather than an empty list, and `store_feed` (`lib.rs:642`) only calls `sync_feed` on a good reply.
+- **Why:** treating a failure as an empty feed would flag every upcoming task as removed. The fetcher reports an error per source, a page that is not a calendar is an error rather than an empty list, and `store_feed` (`feeds.rs`) only calls `sync_feed` on a good reply.
 - **Gave up:** nothing.
 
 ### Deleting an imported task hides it
-- **Why:** deleting the row drops its source link, and the next sync would import it again as new. `remove_task` (`lib.rs:431`) sets `hidden_at` on an imported task and deletes a typed one (schema version 3).
+- **Why:** deleting the row drops its source link, and the next sync would import it again as new. `remove_task` (`tasks.rs`) sets `hidden_at` on an imported task and deletes a typed one (schema version 3).
 - **Gave up:** there is no way to bring a hidden task back from the panel, and hidden rows are never cleaned up.
 - **Revisit when:** someone hides a task by mistake.
 
@@ -286,12 +292,18 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Revisit when:** reminders or sessions need to refer to an event.
 
 ### Sync runs at launch, every half hour, when an address is saved, and on "Sync now"
-- **Why:** one background thread and one lock (`Syncing`) so two syncs never overlap (`sync_feeds`, `lib.rs:662`). The database is not locked while the download runs.
+- **Why:** one background thread and one lock (`Syncing`) so two syncs never overlap (`sync_feeds`, `feeds.rs`). The database is not locked while the download runs.
 - **Gave up:** the half hour does not count time asleep, so the first sync after opening the lid can be up to 30 minutes away. A failure is shown only in Settings.
 - **Revisit when:** stale tasks are noticed after waking; sync on wake.
 
+### "Sync now" reports its result beside the button
+- **Why:** the button gave no sign that anything had happened; the only evidence was the time in each feed's status line changing. It now shows "Syncing…" with the button disabled, then a green "✓ Synced at 3:42 PM", or in red the feeds that failed.
+- **Detail:** no new command. After `sync_now` returns, the panel asks `feeds` again and reads each connected feed's `status.error`, so the message and the per-feed lines cannot disagree (`src/panel/main.ts`).
+- **Detail:** once the line is showing, every `tasks` event redraws it from the same `feeds` data, with the time of the latest sync. A half-hourly sync that fails therefore turns it red too; it cannot keep saying "✓ Synced" beside a failed feed.
+- **Gave up:** the line stays empty until the button is first pressed, so after a restart only the per-feed lines say how the last sync went.
+
 ### Today's schedule is a plain list above the tasks
-- **Why:** the spec asks for events "as a timeline without checkboxes". A list of times and titles, all-day first, is that with no layout code; the section is hidden when there are no events (`events_today`, `lib.rs:727`).
+- **Why:** the spec asks for events "as a timeline without checkboxes". A list of times and titles, all-day first, is that with no layout code; the section is hidden when there are no events (`events_today`, `feeds.rs`).
 - **Gave up:** no hour grid, no "now" marker, and a timed event that began yesterday and runs past midnight is not shown.
 
 ## Phase 2 · Look
@@ -316,7 +328,7 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 ## Phase 2 · Sounds
 
 ### Rust plays macOS system sounds with `afplay`
-- **Why:** a break that starts or ends is easy to miss when the user is looking at their work, not the pet. The tick thread already sees every timer state, so it plays `/System/Library/Sounds/Glass.aiff` when a break starts and `Ping.aiff` on each call back (`play_sound`, `lib.rs`). No dependency and no audio file to ship.
+- **Why:** a break that starts or ends is easy to miss when the user is looking at their work, not the pet. The tick thread already sees every timer state, so it plays `/System/Library/Sounds/Glass.aiff` when a break starts and `Ping.aiff` on each call back (`play_sound`, `session.rs`). No dependency and no audio file to ship.
 - **Rejected:** playing audio in a window (macOS can block sound in a webview the user has not clicked, which is the pet's normal state); a Rust audio crate or the notification plugin (a dependency for two short sounds).
 - **Gave up:** macOS only; other platforms stay silent and log an error each time. No volume control or choice of sound: it follows the system volume. One checkbox in Settings turns both off (`sounds` in the `setting` table, on unless it is `0`).
 - **Detail:** the thread remembers the `[phase, calls]` it last rang for, so the second call back rings again and a user action between ticks cannot ring twice. After the laptop sleeps through a whole break, only the call back rings.
@@ -334,7 +346,7 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Revisit when:** the wide panel has been looked at; cap the content width, or put the tasks beside the tank.
 
 ### The panel moves to the active Space, through AppKit directly
-- **Why:** the panel is hidden, not closed, so macOS remembered the Space it was last on and a click on the pet threw the user back there. Setting `NSWindowCollectionBehavior::MoveToActiveSpace` once at startup makes it appear where the user is (`move_to_active_space`, `lib.rs:756`). Tauri has no config key for this behavior, so it is set on the `NSWindow` itself.
+- **Why:** the panel is hidden, not closed, so macOS remembered the Space it was last on and a click on the pet threw the user back there. Setting `NSWindowCollectionBehavior::MoveToActiveSpace` once at startup makes it appear where the user is (`move_to_active_space`, `windows.rs`). Tauri has no config key for this behavior, so it is set on the `NSWindow` itself.
 - **Rejected:** `visibleOnAllWorkspaces` on the panel too; a normal window that follows across every desktop is in the way.
 - **Gave up:** a macOS-only dependency (`objc2-app-kit`) and one `unsafe` pointer cast, both behind `cfg(target_os = "macos")`. Other platforms get no equivalent.
 - **Revisit when:** Tauri exposes the collection behavior, or the Windows build starts.

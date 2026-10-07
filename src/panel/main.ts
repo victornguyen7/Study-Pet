@@ -4,7 +4,7 @@ import { onStreak, type StreakState } from "../streak";
 import { onTimer, timer } from "../timer";
 
 type Preset = { id: number; name: string; focus_min: number; break_min: number };
-// Mirrors day_data() in src-tauri/src/lib.rs
+// Mirrors day_data() in src-tauri/src/db.rs
 type Day = {
   sessions: { started: number; seconds: number; planned_min: number }[]; // today's focus blocks
   minutes: Record<string, number>; // "YYYY-MM-DD" -> focus minutes
@@ -12,7 +12,7 @@ type Day = {
   threshold: number;
 };
 
-// Mirrors Task in src-tauri/src/lib.rs
+// Mirrors Task in src-tauri/src/tasks.rs
 type Task = {
   id: number;
   title: string;
@@ -27,12 +27,12 @@ type Task = {
   soon: boolean; // the time left until it is due is under twice the work left
   ask_submitted: boolean; // imported and past due: the feed can't say whether it was handed in
 };
-// Mirrors courses() in src-tauri/src/lib.rs
+// Mirrors courses() in src-tauri/src/tasks.rs
 type Course = { course: string; open: number; hidden: boolean };
 
 type Source = "canvas" | "google";
 const sourceNames = { canvas: "Canvas", google: "Google Calendar" };
-// Mirrors feed_list() and store_feed() in src-tauri/src/lib.rs
+// Mirrors feed_list() and store_feed() in src-tauri/src/feeds.rs
 type Feed = {
   source: Source;
   set: boolean;
@@ -41,7 +41,7 @@ type Feed = {
   // ok_at: the last good sync, kept while syncs fail
   status: { at: string; error?: string; ok_at?: string | null; tasks?: number; events?: number } | null;
 };
-// Mirrors events_today() in src-tauri/src/lib.rs
+// Mirrors events_today() in src-tauri/src/feeds.rs
 type CalendarEvent = { title: string; start_at: string; end_at: string; all_day: boolean };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -367,7 +367,43 @@ async function loadFeeds() {
   );
 }
 
-$("sync").onclick = () => run(() => invoke("sync_now"));
+// "Sync now" says how it went: the per-feed lines above have the detail
+const syncButton = $<HTMLButtonElement>("sync");
+
+function showSyncResult(feeds: Feed[]) {
+  const connected = feeds.filter((f) => f.set);
+  const failed = connected.filter((f) => f.status?.error).map((f) => sourceNames[f.source]);
+  const latest = connected.map((f) => f.status?.at ?? "").sort().at(-1);
+  const result = $("sync-result");
+  result.className = failed.length ? "late" : connected.length ? "ok" : "muted";
+  result.textContent = failed.length
+    ? `${failed.join(" and ")} did not sync. See above.`
+    : latest
+      ? `✓ Synced at ${clock(latest)}.`
+      : "Nothing to sync yet. Connect a feed above.";
+}
+
+// a later automatic sync redraws the line, so it never contradicts the feeds above it
+async function refreshSyncResult() {
+  if ($("sync-result").textContent && !syncButton.disabled) showSyncResult(await invoke<Feed[]>("feeds"));
+}
+
+syncButton.onclick = () =>
+  run(async () => {
+    const result = $("sync-result");
+    result.className = "muted";
+    result.textContent = "Syncing…";
+    syncButton.disabled = true;
+    try {
+      await invoke("sync_now");
+      showSyncResult(await invoke<Feed[]>("feeds"));
+    } catch (e) {
+      result.textContent = "";
+      throw e;
+    } finally {
+      syncButton.disabled = false;
+    }
+  });
 
 // ---- courses: which imported courses show on the task list ----
 
@@ -489,7 +525,12 @@ run(loadPresets);
 const loadImports = () => Promise.all([loadTasks(), loadEvents(), loadFeeds(), loadStale(), loadCourses()]);
 run(loadImports);
 let shownDay = new Date().toDateString();
-run(() => listen("tasks", () => run(loadImports)));
+run(() =>
+  listen("tasks", () => {
+    run(loadImports);
+    run(refreshSyncResult);
+  }),
+);
 run(() =>
   onTimer((s) => {
     $("idle").hidden = s.phase !== "idle";

@@ -29,7 +29,7 @@ pet.addEventListener("click", () => {
 });
 
 // A task that has become due soon, or an imported one that has passed its due time and may have been
-// handed in (take_reminder in src-tauri/src/lib.rs). Rust never sends one during a
+// handed in (take_reminder in src-tauri/src/tasks.rs). Rust never sends one during a
 // focus block. It stays in the bubble until the pet is clicked or a focus block starts.
 let reminder = "";
 listen<string>("reminder", (e) => {

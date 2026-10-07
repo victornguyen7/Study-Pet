@@ -13,7 +13,7 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 - Item 1: delete the three old backups after a few good days (the last reinstall was 2026-10-05) and take the address out of `.env`.
 
 **Before Phase 3 (window monitor, drift ladder)**
-- Item 23: split `lib.rs` before the monitor adds to it.
+- Item 23 was done on 2026-10-07: `lib.rs` is split into modules. Run the app once to confirm nothing changed.
 - Item 22: more threads will hold the locks.
 - Items 40, 42, 43 and 46: the drift ladder needs a bubble that can be clicked; fix these with it.
 - No content security policy, and the fixed hide shortcut (see "Older items"): the browser extension and the look-away shortcut make both matter.
@@ -81,7 +81,7 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 20. **Event rows are not stable.** Every sync deletes and re-inserts a source's events, and only yesterday to 30 days ahead is kept. Anything that needs to point at an event (a reminder, a session) has to store the feed's own id and start time, or the storage has to change first.
 21. **Disconnecting a feed leaves its tasks behind.** They stay on the list with their source link, stop updating, and are never flagged as removed.
 22. **A panic while a lock is held breaks the app until restart.** The database and the sync lock are taken with `.lock().unwrap()` (24 places on 2026-10-06); if any code panics while holding one, every later call panics too. This was already true of the database lock; the sync lock adds a second one.
-23. **`lib.rs` is about 1,710 lines in one file,** up from 1,140 two days earlier. `DECISIONS.md` set "hard to navigate" as the point to split it; sessions for tasks, reminders, merging and the Google sign-in each added to it. Line numbers quoted in `DECISIONS.md` go out of date with every change to that file.
+23. **Fixed 2026-10-07: `lib.rs` was one file of 1,810 lines.** It is now eight files (`DECISIONS.md`, "The Rust core is eight files"), and `DECISIONS.md` no longer quotes line numbers. What is left: the tests are still one module of about 490 lines in `lib.rs`, and the split app has been compiled and tested but not yet run.
 24. **No automated test covers the panel.** `npm run build` only type-checks it.
 25. **Google's export is a .zip with one .ics per calendar.** The upload takes a single .ics of at most 5 MB, so the user has to unzip it and pick one calendar; a second calendar would need a second source. A large file is also sent to the fetcher and parsed again every half hour.
 26. **All is one flat list.** The first real import put 54 upcoming assignments in it, sorted by due date, with no grouping by course or week and no search.
@@ -142,6 +142,8 @@ Reviewed 2026-10-06. Item numbers refer to the lists below.
 49. **The panel is 1000 × 700 but its layout is still one narrow column.** Changed 2026-10-06 from 420 × 620. Nothing in `src/panel/panel.css` limits the content width, so every section stretches across the window. Not yet looked at in the running app.
     *Cost if left:* long, thin rows with the text at one end and the buttons at the other.
     *Fix:* give `main` a `max-width` and centre it, or lay Today out in two columns.
+50. **Seen 2026-10-07: the "Sync now" result line works in the running app.** Pressing the button showed the sync working. The failure wording (red, naming the feed) has not been seen, since no feed failed.
+51. **Fixed 2026-10-07: the result line could go stale.** It was only written when the button was pressed, so a later automatic sync that failed left an old "✓ Synced at…" showing. The line is now redrawn from the feeds' own status on every `tasks` event (`refreshSyncResult` in `src/panel/main.ts`). Not yet watched across an automatic sync.
 
 ## Setup traps
 

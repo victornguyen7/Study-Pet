@@ -79,7 +79,7 @@ flowchart TD
 - [x] Task list in the panel: add, check off, delete
 - [x] Today and All views in the panel (a filter over one list; Today is not yet built at 7 am or stored in `planned_for`)
 - [x] ICS feed parser and its tests (`backend/feeds.py`), checked against a real Canvas feed
-- [x] Feed storage with the sync rules for done status and removed items (`sync_feed` in `lib.rs`)
+- [x] Feed storage with the sync rules for done status and removed items (`sync_feed` in `feeds.rs`)
 - [x] Task fetcher process, separate from the offline sidecar (`backend/fetcher.py`)
 - [x] Canvas ICS import with stable source IDs; feed address set in Settings
 - [x] Calendar import by Google's secret iCal address; today's events listed in the panel
@@ -103,6 +103,7 @@ flowchart TD
 - [x] A sound when a break starts and when the pet calls you back, with a checkbox in Settings to turn it off (macOS system sounds)
 - [x] Streak section in the Today view with a pixel fire, in place of the one-line streak text
 - [x] Panel enlarged to 1000 × 700
+- [x] "Sync now" in Settings says whether the sync worked (seen working in the app on 2026-10-07)
 - [ ] Hear the sounds at a real break, and look at the streak section and the wider panel in the running app (`KNOWN_ISSUES.md`, items 47 and 49)
 
 **Decided:** `icalendar` with `recurring-ical-events` parses ICS. OAuth uses no library: the standard library covers the sign-in, and the `security` tool reaches the Keychain.
@@ -126,6 +127,7 @@ flowchart TD
 **Uses:** NSWorkspace and the Accessibility API from Rust, a Chrome or Edge extension for the URL and YouTube player state, new `activity_span` and `app_rule` tables, rules only (no model) to stay under 5% CPU.
 
 **Tasks**
+- [x] Split `lib.rs` into modules before the monitor adds to it (no change in behavior; run the app once to confirm)
 - [ ] Window monitor: front app and title every 5 s
 - [ ] Browser extension that reports the URL
 - [ ] Onboarding that explains each OS permission before asking (PR-10)

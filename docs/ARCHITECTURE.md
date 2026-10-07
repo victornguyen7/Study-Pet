@@ -14,7 +14,7 @@ flowchart LR
         PET["Pet window<br/>index.html"]
         PANEL["Panel window<br/>panel.html"]
     end
-    subgraph CORE["Rust core · src-tauri/src/lib.rs"]
+    subgraph CORE["Rust core · src-tauri/src/"]
         CMD["Commands"]
         TICK["1-second tick"]
         DB[("SQLite<br/>pet.db")]
@@ -45,7 +45,7 @@ flowchart LR
 | Layer | Where | Its job | It never |
 | --- | --- | --- | --- |
 | UI | `src/pet`, `src/panel` | Draw the state, send button presses | Keeps state of its own |
-| Rust core | `src-tauri/src/lib.rs` | Windows, database, tick, passing messages | Decides timer, streak or parsing rules |
+| Rust core | `src-tauri/src/` (`lib.rs` and seven modules) | Windows, database, tick, passing messages | Decides timer, streak or parsing rules |
 | Python sidecar | `backend/main.py` | Timer and streak rules, quick-add parsing | Touches the database or the network |
 | Task fetcher | `backend/fetcher.py`, `backend/feeds.py` | Downloads the saved feeds, reads uploaded .ics files, and turns both into tasks and events; started for each sync, then exits | Touches the database, writes anywhere, or shows a feed address |
 
@@ -64,7 +64,7 @@ flowchart LR
 
 - **UI to Rust:** `invoke("command_name", args)`. The commands are `timer`, `streak`, `day`, `list_presets`, `add_preset`, `delete_preset`, `set_streak_threshold`, `sounds`, `merge_task`, `list_courses`, `set_course`, `connect_google`, `add_task`, `list_tasks`, `set_task_done`, `delete_task`, `feeds`, `set_feed`, `set_feed_file`, `sync_now`, `list_events`, `toggle_panel` and `backend_call`.
 - **Rust to UI:** `timer` and `streak` events, sent to both windows at once. This is why the pet and the panel always agree. A third event, `tasks`, carries no data: it is sent after each feed sync, and the panel reloads its tasks, schedule and feed status. After its own changes the panel just reloads.
-- **Sounds:** the tick thread in `lib.rs` compares each new timer state with the last one it rang for. A break that starts plays Glass, and each call back plays Ping, through `afplay` (macOS only). No window is involved, so it works with the panel closed and the pet hidden.
+- **Sounds:** the tick thread in `run` (`lib.rs`) compares each new timer state with the last one it rang for. A break that starts plays Glass, and each call back plays Ping, through `afplay` (macOS only). No window is involved, so it works with the panel closed and the pet hidden.
 - **Rust to the sidecar:** one line of JSON in, one line out: `{"method": "timer", "params": {...}}` returns `{"ok": ...}` or `{"error": ...}`.
 - **Rust to the fetcher:** one JSON object in on stdin, `{"feeds": {"canvas": address, ...}, "files": {"google": ics text, ...}, "accounts": {"google": client and refresh token}}` (or `{"connect": {"google": client}}` to sign in), and one out, with `{"ok": [items]}` or `{"error": "..."}` for each source. The process then exits.
 
@@ -133,12 +133,12 @@ Deleting an imported task in the panel sets `hidden_at` instead of removing the 
 
 ### The windows and macOS Spaces
 
-The pet is set in `tauri.conf.json` to show on every Space, so it follows the user between desktops. The panel is a normal window that lives on one Space at a time; at startup Rust sets its AppKit collection behavior to move to the active Space (`move_to_active_space` in `lib.rs`, macOS only), so a click on the pet opens the panel where the user is. This is the one place the core calls AppKit directly, through `objc2-app-kit`.
+The pet is set in `tauri.conf.json` to show on every Space, so it follows the user between desktops. The panel is a normal window that lives on one Space at a time; at startup Rust sets its AppKit collection behavior to move to the active Space (`move_to_active_space` in `windows.rs`, macOS only), so a click on the pet opens the panel where the user is. This is the one place the core calls AppKit directly, through `objc2-app-kit`.
 
 ### Adding a feature in this shape
 
 1. **Rule** (a calculation or a state machine): write a function in `backend/`, using only the standard library, add it to `METHODS` in `backend/main.py`, and give it a test in `backend/tests/`.
-2. **Storage**: add the table in `init_db` and a command in `lib.rs`, then list the command in `generate_handler!`.
+2. **Storage**: add the table in `init_db` (`db.rs`) and a command in the module it belongs to (`tasks.rs`, `feeds.rs`, ...), marked `pub(crate)`, then list it by path in `generate_handler!` in `lib.rs`, such as `tasks::add_task`.
 3. **Screen**: call the command with `invoke` and draw the result. If both windows need it, have Rust `emit` an event instead.
 
 ## The full system

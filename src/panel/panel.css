@@ -394,12 +394,18 @@ form {
   font-size: 13px;
 }
 
-.feed .late {
+.feed .late,
+#sync-result.late {
   color: #c2452d;
 }
 
-#sync {
-  margin-bottom: 4px;
+#sync-result {
+  margin: 0;
+  font-size: 13px;
+}
+
+#sync-result.ok {
+  color: #2e8b57;
 }
 
 /* ---- wrap up ---- */

@@ -1,0 +1,73 @@
+use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::Mutex;
+
+use serde_json::{json, Value};
+use tauri::State;
+
+// ---- Python sidecar: one JSON object per line over stdin/stdout ----
+
+pub(crate) struct Sidecar {
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+    _child: Child, // exits on its own when our end of stdin closes
+}
+
+#[derive(Default)]
+pub(crate) struct Backend(Mutex<Option<Sidecar>>);
+
+pub(crate) fn spawn_sidecar() -> std::io::Result<Sidecar> {
+    // ponytail: dev-only paths into the source tree. For a distributable build,
+    // freeze backend/ with PyInstaller and ship it via tauri.conf.json `bundle.externalBin`.
+    // Run as a module from the project root so `from backend.x import ...` resolves.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut child = Command::new(root.join("backend/.venv/bin/python"))
+        .args(["-m", "backend.main"])
+        .current_dir(&root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
+    Ok(Sidecar {
+        stdin: child.stdin.take().unwrap(),
+        stdout: BufReader::new(child.stdout.take().unwrap()),
+        _child: child,
+    })
+}
+
+pub(crate) fn call(sidecar: &mut Sidecar, method: &str, params: Option<Value>) -> Result<Value, String> {
+    writeln!(sidecar.stdin, "{}", json!({ "method": method, "params": params }))
+        .map_err(|e| e.to_string())?;
+    let mut line = String::new();
+    sidecar.stdout.read_line(&mut line).map_err(|e| e.to_string())?;
+    let mut res: Value =
+        serde_json::from_str(&line).map_err(|e| format!("bad sidecar reply {line:?}: {e}"))?;
+    match res.get("error") {
+        Some(err) => Err(err.to_string()),
+        None => Ok(res["ok"].take()),
+    }
+}
+
+// ponytail: one sidecar behind one lock, so a long job (graph building) would stall the
+// timer tick. Give long jobs their own process when Phase 5 adds them.
+pub(crate) fn sidecar_call(backend: &Backend, method: &str, params: Option<Value>) -> Result<Value, String> {
+    let mut guard = backend.0.lock().unwrap();
+    if guard.is_none() {
+        *guard = Some(spawn_sidecar().map_err(|e| format!("can't start python backend: {e}"))?);
+    }
+    let res = call(guard.as_mut().unwrap(), method, params);
+    if res.is_err() {
+        *guard = None; // respawn on next call in case the process died
+    }
+    res
+}
+
+// async: runs off the main thread, since sidecar jobs can be slow
+#[tauri::command(async)]
+pub(crate) fn backend_call(
+    backend: State<Backend>,
+    method: String,
+    params: Option<Value>,
+) -> Result<Value, String> {
+    sidecar_call(&backend, &method, params)
+}

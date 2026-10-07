@@ -88,7 +88,7 @@ Automated, in `backend/tests/test_fetcher.py`, with the network faked as the fee
 - A refused refresh token gives the "sign in again" message, with no token in it.
 - The sign-in address carries the scope, the PKCE challenge and the `state` value.
 
-Automated, in `lib.rs`:
+Automated, in the tests in `lib.rs`:
 
 - A source holds exactly one of address, file or account; saving one clears the others; disconnecting clears all three.
 - A token goes into the real Keychain under a test service name, is replaced, read back and deleted; a token that could split the command line is refused.
