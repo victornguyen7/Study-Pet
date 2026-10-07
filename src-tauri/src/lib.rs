@@ -21,6 +21,8 @@ mod browser;
 #[cfg(target_os = "macos")]
 mod monitor;
 
+mod modes;
+
 mod session;
 use session::{play_sound, streak_state, timer_action};
 
@@ -94,7 +96,12 @@ pub fn run() {
                             let text = take_reminder(&handle.state::<Db>().0.lock().unwrap());
                             match text {
                                 Ok(Some(text)) => drop(handle.emit("reminder", text)),
-                                Ok(None) => {}
+                                // nothing due: an app or site the pet cannot place is asked about, once each
+                                Ok(None) => match modes::question(&handle) {
+                                    Ok(Some(text)) => drop(handle.emit("reminder", text)),
+                                    Ok(None) => {}
+                                    Err(e) => eprintln!("mode question failed: {e}"),
+                                },
                                 Err(e) => eprintln!("reminder check failed: {e}"),
                             }
                         }
@@ -175,6 +182,9 @@ pub fn run() {
             feeds::sync_now,
             feeds::list_events,
             windows::toggle_panel,
+            modes::modes_today,
+            modes::declared_mode,
+            modes::learned,
             #[cfg(unix)]
             browser::site_time,
             #[cfg(target_os = "macos")]
@@ -286,6 +296,60 @@ mod tests {
         println!("accessibility allowed: {}", monitor::accessibility(false)); // only checks, never asks
         println!("{front:?}");
         assert!(front.is_some_and(|(name, _)| !name.is_empty()));
+    }
+
+    #[test]
+    fn todays_spans_are_labeled_by_the_python_rules() {
+        use modes::{declare, declared, is_private, mode_input, rules, set_rule, take_question};
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        assert_eq!(mode_input(&conn).unwrap(), json!({ "apps": [], "pages": [], "sessions": [], "declarations": [], "rules": {} }));
+        // 20 min ago: 10 min on a course site in Chrome, then 5 min in an app nothing knows
+        let now: i64 = conn.query_row("SELECT unixepoch('now')", [], |r| r.get(0)).unwrap();
+        let t = now - 1200;
+        let at = |secs: i64| chrono::DateTime::from_timestamp(secs, 0).unwrap().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        conn.execute("INSERT INTO app_span (started_at, ended_at, app, bundle_id) VALUES (?1, ?2, 'Google Chrome', 'com.google.Chrome'), (?2, ?3, 'Preview', NULL)", (at(t), at(t + 600), at(t + 900))).unwrap();
+        conn.execute("INSERT INTO activity_span (started_at, ended_at, domain, url, title) VALUES (?1, ?2, 'canvas.school.edu', 'https://canvas.school.edu/', 'Canvas')", (at(t), at(t + 600))).unwrap();
+
+        // only one declaration is in force at a time, and a mode that does not exist is refused
+        declare(&conn, Some("relax")).unwrap();
+        declare(&conn, Some("study")).unwrap();
+        assert!(declare(&conn, Some("nap")).is_err());
+        assert_eq!(declared(&conn).unwrap().as_deref(), Some("study"));
+        let input = mode_input(&conn).unwrap();
+        assert_eq!((input["apps"][1]["bundle_id"].clone(), input["declarations"].as_array().unwrap().len()), (Value::Null, 2));
+
+        // run just after local midnight, the spans fall on yesterday and there is nothing to label
+        let today: bool = conn.query_row("SELECT date(?1, 'unixepoch', 'localtime') = date('now', 'localtime')", [t], |r| r.get(0)).unwrap();
+        if today {
+            let mut sidecar = spawn_sidecar().unwrap();
+            let day = call(&mut sidecar, "modes", Some(input)).unwrap();
+            // the 5 unknown minutes take the label they follow
+            assert_eq!(day["totals"], json!({ "study": 900 }));
+            assert_eq!(day["spans"][0]["source"], "rule");
+        }
+        declare(&conn, None).unwrap();
+        assert_eq!(declared(&conn).unwrap(), None);
+
+        // PR-2: each unknown is brought up once, and stays out of the rules until it is answered
+        let unknown = json!([{ "key": "preview", "name": "Preview", "seconds": 300 }, { "key": "canvas.school.edu", "name": "canvas.school.edu", "seconds": 200 }]);
+        assert_eq!(take_question(&conn, &unknown).unwrap().as_deref(), Some("What is Preview for? Open the panel and tell me."));
+        assert_eq!(take_question(&conn, &unknown).unwrap().as_deref(), Some("What is canvas.school.edu for? Open the panel and tell me."));
+        assert_eq!(take_question(&conn, &unknown).unwrap(), None);
+        assert_eq!((rules(&conn).unwrap().len(), mode_input(&conn).unwrap()["rules"].clone()), (0, json!({})));
+        set_rule(&conn, "Preview", "Preview", "study").unwrap();
+        set_rule(&conn, "preview", "Preview", "work").unwrap(); // a second answer replaces the first
+        assert!(set_rule(&conn, "preview", "Preview", "nap").is_err());
+        assert_eq!(mode_input(&conn).unwrap()["rules"], json!({ "preview": "work" }));
+        assert_eq!(rules(&conn).unwrap(), [json!({ "key": "preview", "name": "Preview", "mode": "work" })]);
+        // Private takes the name off what is already stored, and the gate keeps new samples out
+        set_rule(&conn, "preview", "Preview", "private").unwrap();
+        set_rule(&conn, "canvas.school.edu", "canvas.school.edu", "private").unwrap();
+        let apps: Vec<String> = conn.prepare("SELECT app FROM app_span ORDER BY id").unwrap().query_map([], |r| r.get(0)).unwrap().collect::<rusqlite::Result<_>>().unwrap();
+        let pages: i64 = conn.query_row("SELECT count(*) FROM activity_span", [], |r| r.get(0)).unwrap();
+        assert_eq!((apps, pages), (vec!["Google Chrome".to_string(), "Private".to_string()], 0));
+        assert!(is_private(&conn, "Preview").unwrap() && !is_private(&conn, "com.google.Chrome").unwrap());
+        assert!(!browser::record_page(&conn, "https://canvas.school.edu/a", "A", now).unwrap());
     }
 
     #[test]

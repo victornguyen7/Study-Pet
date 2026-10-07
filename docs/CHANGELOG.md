@@ -9,6 +9,8 @@
 - Front-app monitor (`monitor.rs`, macOS): every 5 seconds the name and bundle ID of the app in front go into the new table `app_span` (start, end, app, bundle ID). No window title is read. Nothing is recorded during a break, for the pet itself or at the lock screen. New command `app_time`; "Apps today" in the Wrap up view lists time per app.
 - "Permissions" in Settings (PR-10): what the Accessibility permission is for, whether it is allowed, and a button that makes macOS ask. New command `accessibility`. Nothing uses the permission yet.
 - Privacy gate for apps (PR-1): password managers, chat and mail apps on a built-in list are recorded as "Private", with no name or bundle ID.
+- Mode classifier (`backend/modes.py`): labels today's app and page spans Study, Work, Relax or Private, from the user's declaration, a learned rule, the app or site category, then a running focus block; a stretch under 3 minutes keeps the label it interrupts. New table `mode_declaration`, commands `modes_today` and `declared_mode`, and a "Right now I'm" picker in the Today view.
+- Ask once and remember (PR-2): the pet asks what an unrecognized app or site is for, once, and the Today view lists the open questions with Study, Work, Relax and Private buttons. New table `app_rule` and command `learned`; "What the pet has learned" in Settings lists the answers. A Private answer renames the app's past spans to "Private", deletes the site's recorded pages, and keeps new ones out.
 
 ## 0.2.0 · Phase 2, in progress
 

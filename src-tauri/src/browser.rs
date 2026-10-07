@@ -43,6 +43,10 @@ fn clean(url: &str) -> Option<(String, String)> {
 /// False when the address is not a web page.
 pub(crate) fn record_page(conn: &Connection, url: &str, title: &str, now: i64) -> rusqlite::Result<bool> {
     let Some((domain, url)) = clean(url) else { return Ok(false) };
+    // PR-1: a site the user made Private is not kept, whatever the extension was told
+    if crate::modes::is_private(conn, &domain)? {
+        return Ok(false);
+    }
     let title: String = title.chars().take(300).collect();
     let last: Option<(i64, String, i64)> = conn
         .query_row("SELECT id, url, unixepoch(ended_at) FROM activity_span ORDER BY id DESC LIMIT 1", [], |r| {

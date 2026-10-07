@@ -9,6 +9,7 @@ import json
 import sys
 import time
 
+from backend.modes import label_day
 from backend.streaks import streak
 from backend.tasks import parse_quick_add
 from backend.timer import Timer
@@ -31,10 +32,18 @@ def timer(params):
     return _timer.state(now) | {"sessions": _timer.drain_finished()}
 
 
+def modes(params):
+    """params: the arguments of label_day. A focus block still running is added here: only the timer knows it."""
+    if _timer.phase == "focus":
+        params["sessions"] = [*params.get("sessions", []), {"start": _timer.started_at, "end": time.time()}]
+    return label_day(**params)
+
+
 METHODS = {
     "ping": ping,
     "timer": timer,
     "streak": lambda params: streak(**params),
+    "modes": modes,
     "quick_add": lambda params: parse_quick_add(**params),
 }
 

@@ -457,6 +457,51 @@ run(async () => {
   sounds.checked = await invoke<boolean>("sounds");
 });
 
+// the user's own word on the mode, which beats every rule in backend/modes.py
+const mode = $<HTMLSelectElement>("mode");
+mode.onchange = () => run(() => invoke("declared_mode", { set: mode.value }));
+run(async () => {
+  mode.value = (await invoke<string | null>("declared_mode")) ?? "";
+});
+
+// PR-2: apps and sites the pet could not place (label_day in backend/modes.py), and the answers it keeps
+type Rule = { key: string; name: string; mode: string };
+const MODES = ["study", "work", "relax", "private"];
+function showLearned(rules: Rule[]) {
+  $("learned").replaceChildren(
+    ...rules.map((r) => {
+      const li = el("li");
+      const forget = el("button", "Forget");
+      forget.onclick = () => run(async () => showLearned(await invoke<Rule[]>("learned", { key: r.key, mode: "" })));
+      li.append(el("span", `${r.name}: ${r.mode}`), forget);
+      return li;
+    }),
+  );
+  if (!rules.length) $("learned").append(el("li", "Nothing yet.", "empty"));
+}
+async function loadAsks() {
+  const { unknown } = await invoke<{ unknown: { key: string; name: string; seconds: number }[] }>("modes_today");
+  $("ask").hidden = !unknown.length;
+  $("ask-list").replaceChildren(
+    ...unknown.map((u) => {
+      const li = el("li");
+      const buttons = el("span", "", "row");
+      for (const mode of MODES) {
+        const b = el("button", mode[0].toUpperCase() + mode.slice(1));
+        b.onclick = () =>
+          run(async () => {
+            showLearned(await invoke<Rule[]>("learned", { key: u.key, name: u.name, mode }));
+            await loadAsks();
+          });
+        buttons.append(b);
+      }
+      li.append(el("span", `${u.name} · ${duration(u.seconds / 60)} today`), buttons);
+      return li;
+    }),
+  );
+}
+run(async () => showLearned(await invoke<Rule[]>("learned")));
+
 // PR-10: macOS is only ever made to ask from this button, which sits under the explanation
 async function loadAccessibility(ask = false) {
   const allowed = await invoke<boolean>("accessibility", { ask });
@@ -529,6 +574,7 @@ async function loadDay(streak: StreakState) {
     `${goal} Your streak is ${streakText}, with ${plural(streak.freezes_left, "freeze")} left this month.`;
 
   await loadSites();
+  await loadAsks();
 
   // 7 days ending today; noon avoids daylight-saving edges when stepping by day
   const days = Array.from({ length: 7 }, (_, i) => {

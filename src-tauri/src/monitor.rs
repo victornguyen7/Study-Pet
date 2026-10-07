@@ -113,7 +113,13 @@ pub(crate) fn start(app: AppHandle) {
             continue;
         }
         let Some((name, bundle)) = front_app().map(gate) else { continue };
-        let saved = record_app(&app.state::<Db>().0.lock().unwrap(), &name, bundle.as_deref(), chrono::Utc::now().timestamp());
+        let db = app.state::<Db>();
+        let conn = db.0.lock().unwrap();
+        // the user's own Private apps, by the same key backend/modes.py uses
+        let saved = crate::modes::is_private(&conn, bundle.as_deref().unwrap_or(&name)).and_then(|private| {
+            let (name, bundle) = if private { ("Private", None) } else { (name.as_str(), bundle.as_deref()) };
+            record_app(&conn, name, bundle, chrono::Utc::now().timestamp())
+        });
         if let Err(e) = saved {
             eprintln!("app sample failed: {e}");
         }

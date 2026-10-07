@@ -77,6 +77,18 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             ended_at TEXT NOT NULL,
             app TEXT NOT NULL,        -- the name the Dock shows
             bundle_id TEXT            -- such as 'com.apple.Safari'; some programs have none
+        );
+        CREATE TABLE IF NOT EXISTS mode_declaration (
+            id INTEGER PRIMARY KEY,
+            started_at TEXT NOT NULL, -- UTC timestamp
+            ended_at TEXT,            -- NULL while it is in force
+            mode TEXT NOT NULL CHECK (mode IN ('study', 'work', 'relax'))
+        );
+        CREATE TABLE IF NOT EXISTS app_rule (
+            key TEXT PRIMARY KEY,     -- a site, or an app's bundle ID (its name if it has none), in lower case
+            name TEXT NOT NULL,       -- as shown to the user
+            mode TEXT CHECK (mode IN ('study', 'work', 'relax', 'private')), -- NULL: asked, not answered yet
+            asked_at TEXT             -- when the pet brought it up; NULL if the user answered unasked
         );",
     )?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;

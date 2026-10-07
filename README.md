@@ -26,7 +26,7 @@ To record pages from Chrome, start the app once (it tells Chrome where to find i
 
     npm run build                   # typecheck + bundle the UI
     cd src-tauri && cargo test      # DB schema + Rust <-> Python round trip
-    backend/.venv/bin/python -m unittest backend.tests.test_timer backend.tests.test_streaks backend.tests.test_tasks backend.tests.test_feeds backend.tests.test_fetcher   # timer, streak, quick add, feed parsing and the fetcher (from the project root)
+    backend/.venv/bin/python -m unittest backend.tests.test_timer backend.tests.test_streaks backend.tests.test_tasks backend.tests.test_feeds backend.tests.test_fetcher backend.tests.test_modes   # timer, streak, quick add, feed parsing and the fetcher (from the project root)
 
 To run the whole import against a real feed, into a throwaway database:
 

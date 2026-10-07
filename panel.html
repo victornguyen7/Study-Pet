@@ -54,6 +54,27 @@
         </div>
       </section>
 
+      <section class="row">
+        <label>Right now I'm
+          <select id="mode">
+            <option value="">letting the pet decide</option>
+            <option value="study">studying</option>
+            <option value="work">working</option>
+            <option value="relax">relaxing</option>
+          </select>
+        </label>
+        <span class="muted">Your word beats the pet's guess until you change it back.</span>
+      </section>
+
+      <section id="ask" hidden>
+        <h2>What are these for?</h2>
+        <ul id="ask-list" class="rows"></ul>
+        <p class="muted">
+          The pet could not place them. It asks once and remembers. Private takes the name off what is already
+          recorded and keeps only the time from now on. Change an answer in Settings.
+        </p>
+      </section>
+
       <section id="streak">
         <img id="fire" src="/src/panel/fire.svg" alt="" width="39" height="48" />
         <div>
@@ -155,6 +176,11 @@
         <h2>Courses</h2>
         <ul id="course-list" class="rows"></ul>
         <p class="muted">Untick a course to hide its imported assignments. Nothing is deleted; tick it to bring them back.</p>
+      </section>
+      <section>
+        <h2>What the pet has learned</h2>
+        <ul id="learned" class="rows"></ul>
+        <p class="muted">Your answers about apps and sites. Forget one and the pet may ask again.</p>
       </section>
       <section>
         <h2>Permissions</h2>

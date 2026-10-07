@@ -136,9 +136,9 @@ flowchart TD
 - [x] Onboarding that explains each OS permission before asking (PR-10): a "Permissions" section in Settings explains Accessibility, shows whether it is allowed, and holds the only button that makes macOS ask (2026-10-07; the check was run and answered "not allowed", the button and the macOS question have not been tried)
 - [x] Press "Ask macOS for it" in the running app and turn the permission on: the line should change to "allowed" when the panel comes back to the front
 - [x] Privacy gate with default Private apps, running before anything else (PR-1): every front-app sample passes through `gate` in `monitor.rs` before it is stored, and a password manager, chat or mail app on the built-in list is kept as "Private" with no name or bundle ID (2026-10-07; tested with made-up samples, not yet seen in the running app). For pages, the extension's yes or no on each page is the gate
-- [ ] Later for the gate: the user's own Private apps (with "ask once and remember"), and private windows inside ordinary apps, such as incognito or a password field
-- [ ] Mode classifier: declaration, learned rule, app category, context
-- [ ] Ask once and remember the answer
+- [ ] Later for the gate: private windows inside ordinary apps, such as incognito or a password field (the user's own Private apps and sites came with "ask once and remember")
+- [x] Mode classifier: declaration, learned rule, app category, context (`backend/modes.py`, with tests): today's app and page spans are labeled Study, Work, Relax or Private, with 3-minute smoothing; a "Right now I'm" picker in Today is the declaration; the command `modes_today` returns the labeled stretches and the seconds per mode (2026-10-07; nothing on screen shows the labels yet, and the picker has not been tried in the running app). No rule is learned yet, the category list is short, and context is a focus block only
+- [x] Ask once and remember the answer (PR-2): an app or site nothing recognizes, in front for 3 minutes in a day, is brought up once in the pet's bubble and listed in Today under "What are these for?" with Study, Work, Relax and Private buttons. Answers are kept in `app_rule`, used by the classifier and the gate, and listed in Settings with a Forget button (2026-10-07; tested with made-up spans, not yet tried in the running app)
 - [ ] Drift rules and the four-step ladder
 - [ ] Background-audio rules and the 60-second grace period
 - [ ] Pet states: Relaxing, Headphones, Nudging, Happy

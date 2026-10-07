@@ -61,6 +61,8 @@ flowchart LR
 | `calendar_event` | Imported calendar events from yesterday to 30 days ahead, replaced on every sync | Yes |
 | `activity_span` | Pages from the Chrome extension: site, address, title, start and end | Yes |
 | `app_span` | The app in front, from the window monitor: name, bundle ID, start and end. No window title | Yes |
+| `app_rule` | What the user said an app or site is for (Study, Work, Relax or Private), and which ones the pet has already asked about | Yes |
+| `mode_declaration` | The mode the user said they were in ("Right now I'm relaxing"), with its start and end | Yes |
 
 ### How the layers talk
 
