@@ -109,6 +109,15 @@
           front. Not during breaks, and only while Study Pet is running.
         </p>
       </section>
+      <section>
+        <h2>Apps today</h2>
+        <ol id="apps" class="rows"></ol>
+        <p class="muted">
+          The app in front, checked every 5 seconds: its name and the time only, never the window's title or what is
+          in it. Password managers, chat and mail apps are counted together as “Private”, without their names. Not
+          during breaks, and only while Study Pet is running.
+        </p>
+      </section>
     </main>
 
     <main id="settings" hidden>
@@ -146,6 +155,21 @@
         <h2>Courses</h2>
         <ul id="course-list" class="rows"></ul>
         <p class="muted">Untick a course to hide its imported assignments. Nothing is deleted; tick it to bring them back.</p>
+      </section>
+      <section>
+        <h2>Permissions</h2>
+        <p>Accessibility: <span id="ax-status" role="status"></span></p>
+        <p class="muted">
+          macOS asks for this before any app may read the title of the window in front. Study Pet will use the title
+          to tell study from drift, such as which document is open. It will not read what is inside the window, and
+          it cannot type or click for you. Titles are not read yet in this version. Without the permission the pet
+          still sees which app is in front.
+        </p>
+        <p class="muted">
+          The button makes macOS show its own question, which opens System Settings, “Privacy &amp; Security”,
+          “Accessibility”. Turn Study Pet on there; turn it off there at any time.
+        </p>
+        <button id="ax-ask" hidden>Ask macOS for it</button>
       </section>
       <section>
         <h2>Pet</h2>

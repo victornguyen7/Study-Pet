@@ -60,6 +60,7 @@ flowchart LR
 | `task_source_link` | Which imported item a task came from; `(source, source_uid)` is unique so a re-import cannot duplicate; `removed_at` marks one that left its feed | Yes |
 | `calendar_event` | Imported calendar events from yesterday to 30 days ahead, replaced on every sync | Yes |
 | `activity_span` | Pages from the Chrome extension: site, address, title, start and end | Yes |
+| `app_span` | The app in front, from the window monitor: name, bundle ID, start and end. No window title | Yes |
 
 ### How the layers talk
 

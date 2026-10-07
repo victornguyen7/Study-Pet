@@ -376,3 +376,21 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Why:** asked for on 2026-10-07. The query string stays because it tells pages apart (a YouTube video is `?v=...`); the `#fragment` is dropped. Samples of the same address join into one `activity_span` row; a sample more than 15 s after the last starts a new row.
 - **Gave up:** an address can carry private text in its query (a search, a share token), and it is stored in a database that is not encrypted yet. `activity_span` has no app, mode, tier or label source until something fills them.
 - **Revisit when:** the SQLCipher task in Phase 4, and the classifier.
+
+### The window monitor records the app's name first, and no window title yet
+- **Why:** built on 2026-10-07. The front app comes from `NSWorkspace`, which needs no permission, and a name with its time is what the spec allows for a Neutral app (C-3). A window title needs the Accessibility permission, which must be explained before it is asked for (PR-10), and a title can hold a chat's name or a document's, so it waits for the privacy gate (PR-1).
+- **Detail:** samples join into `app_span` rows by the same 15-second rule as pages. Apps are in their own table, not `activity_span`, because Chrome in front is both an app and a page and the two would break each other's joins. The bundle ID is kept beside the name for the rules to come, since it cannot be filled in afterwards.
+- **Gave up:** default Private apps are not hidden yet: a password manager or a mail client is listed by name, though nothing in it is read. An app left in front with nobody at the keyboard keeps counting until the screen locks or the laptop sleeps.
+- **Revisit when:** the privacy gate (Private apps must stop being named), and the drift ladder (idle time must stop counting).
+
+### Onboarding is a section in Settings, not a first-run screen
+- **Why:** built on 2026-10-07. PR-10 asks that a permission be explained before macOS asks for it. The pet never asks by itself: the macOS question comes only from a button in Settings, under the explanation, so the order cannot go wrong. Phase 3 needs one permission, Accessibility, for the window title.
+- **Detail:** `accessibility` in `monitor.rs` calls `AXIsProcessTrusted`, or `AXIsProcessTrustedWithOptions` with the prompt when the button is pressed. The panel checks again whenever it comes to the front, since the answer is given in System Settings.
+- **Gave up:** nothing leads a new user to the section, and the permission is asked for before anything uses it. Run with `npm run tauri dev`, macOS may name the terminal that started the app instead of Study Pet.
+- **Revisit when:** the window title is read (the pet should then point at the section once), and Phase 4, which adds screen recording.
+
+### The privacy gate is a built-in list of apps, and a Private app keeps no name
+- **Why:** built on 2026-10-07. The gate runs on each front-app sample before it reaches the database (PR-1), so a Private app's name is never stored and then removed. The spec says both "labeled by app name only" and "only private time, N minutes" for Private; the stricter one was taken, so all Private apps share one "Private" row.
+- **Detail:** the list is `PRIVATE_APPS` in `monitor.rs`, matched by bundle ID: password managers, messaging and mail. For pages the gate is the extension's question on every page.
+- **Gave up:** an app that is not on the list is named. Banking is on the web, where the page question covers it. Incognito windows and screens with a password field cannot be told from an app's name. Slack and Discord count as Private even when used for a course.
+- **Revisit when:** "ask once and remember" adds the user's own answers in `app_rule`, which should be checked before the list; and when window titles are read.

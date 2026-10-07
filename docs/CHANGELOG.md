@@ -6,6 +6,9 @@
 - Chrome extension in `extension/` (load it unpacked): on every page opened it asks "can I look at this page?", and for an allowed page in front sends its address and title to the app every 5 seconds. No answer is remembered: a yes covers that page in that tab until the tab goes somewhere else. Its popup says whether the app is connected.
 - The app receives pages by native messaging (`browser.rs`): a Unix socket `ext.sock` and a host script `chrome-host.sh` beside `pet.db`, and a host manifest written into Chrome's folder at launch. Nothing is recorded while the app is closed or during a break.
 - New table `activity_span` (start, end, site, address, title) and command `site_time`. "Sites today" in the Wrap up view lists time per site.
+- Front-app monitor (`monitor.rs`, macOS): every 5 seconds the name and bundle ID of the app in front go into the new table `app_span` (start, end, app, bundle ID). No window title is read. Nothing is recorded during a break, for the pet itself or at the lock screen. New command `app_time`; "Apps today" in the Wrap up view lists time per app.
+- "Permissions" in Settings (PR-10): what the Accessibility permission is for, whether it is allowed, and a button that makes macOS ask. New command `accessibility`. Nothing uses the permission yet.
+- Privacy gate for apps (PR-1): password managers, chat and mail apps on a built-in list are recorded as "Private", with no name or bundle ID.
 
 ## 0.2.0 · Phase 2, in progress
 

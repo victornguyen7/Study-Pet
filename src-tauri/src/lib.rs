@@ -18,6 +18,9 @@ mod windows;
 #[cfg(unix)]
 mod browser;
 
+#[cfg(target_os = "macos")]
+mod monitor;
+
 mod session;
 use session::{play_sound, streak_state, timer_action};
 
@@ -52,6 +55,8 @@ pub fn run() {
                 eprintln!("browser extension link failed: {e}");
             }
             app.manage(DataDir(dir));
+            #[cfg(target_os = "macos")]
+            monitor::start(app.handle().clone());
 
             // drive the timer once a second; every window hears the new state as a "timer" event
             let handle = app.handle().clone();
@@ -63,7 +68,7 @@ pub fn run() {
                     if let Err(e) = &state {
                         eprintln!("timer tick failed: {e}");
                     }
-                    // C-4: pages from the extension are not noted during a break
+                    // C-4: pages from the extension and the front app are not noted during a break
                     #[cfg(unix)]
                     browser::PAUSED.store(
                         state.as_ref().is_ok_and(|s| s["phase"] == "break"),
@@ -171,7 +176,11 @@ pub fn run() {
             feeds::list_events,
             windows::toggle_panel,
             #[cfg(unix)]
-            browser::site_time
+            browser::site_time,
+            #[cfg(target_os = "macos")]
+            monitor::app_time,
+            #[cfg(target_os = "macos")]
+            monitor::accessibility
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -235,6 +244,48 @@ mod tests {
         let mut seen = vec![];
         read_frames(&bytes[..], |m| seen.push(m));
         assert_eq!(seen, [json!({ "url": "u" }), json!({})]);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn front_app_samples_join_into_spans() {
+        use monitor::{app_time_today, gate, record_app};
+        // PR-1: a Private app is stored without its name or bundle ID, whatever the case of the ID
+        let app = |name: &str, id: Option<&str>| gate((name.to_string(), id.map(Into::into)));
+        assert_eq!(app("Messages", Some("com.apple.MobileSMS")), ("Private".into(), None));
+        assert_eq!(app("Mail", Some("com.apple.Mail")), ("Private".into(), None));
+        assert_eq!(app("Preview", Some("com.apple.Preview")), ("Preview".into(), Some("com.apple.Preview".into())));
+        assert_eq!(app("a.out", None), ("a.out".into(), None));
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        let now: i64 = conn.query_row("SELECT unixepoch('now')", [], |r| r.get(0)).unwrap();
+        let t = now - 1000;
+        // 10 s in one app, 5 s in the next (counted from where the first ended), then a sample after a gap
+        for (app, at) in [("Preview", 0), ("Preview", 5), ("Preview", 10), ("Code", 15), ("Code", 600)] {
+            record_app(&conn, app, Some("com.example"), t + at).unwrap();
+        }
+        let spans: Vec<(String, i64)> = conn
+            .prepare("SELECT app, unixepoch(ended_at) - unixepoch(started_at) FROM app_span ORDER BY id").unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap()
+            .collect::<rusqlite::Result<_>>().unwrap();
+        assert_eq!(spans, [("Preview".into(), 10), ("Code".into(), 5), ("Code".into(), 0)]);
+        // run just after local midnight, the spans fall on yesterday and today's list is empty
+        let today: bool = conn.query_row("SELECT date(?1, 'unixepoch', 'localtime') = date('now', 'localtime')", [t], |r| r.get(0)).unwrap();
+        if today {
+            assert_eq!(app_time_today(&conn).unwrap(), [json!({ "app": "Preview", "seconds": 10 }), json!({ "app": "Code", "seconds": 5 })]);
+        }
+    }
+
+    /// Asks macOS for the app really in front, from a thread as the monitor does:
+    ///   cargo test real_front_app -- --ignored --nocapture
+    #[test]
+    #[cfg(target_os = "macos")]
+    #[ignore = "needs a desktop session with an app in front"]
+    fn real_front_app() {
+        let front = std::thread::spawn(monitor::front_app).join().unwrap();
+        println!("accessibility allowed: {}", monitor::accessibility(false)); // only checks, never asks
+        println!("{front:?}");
+        assert!(front.is_some_and(|(name, _)| !name.is_empty()));
     }
 
     #[test]

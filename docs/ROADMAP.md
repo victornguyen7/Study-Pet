@@ -128,11 +128,15 @@ flowchart TD
 
 **Tasks**
 - [x] Split `lib.rs` into modules before the monitor adds to it (no change in behavior; run the app once to confirm)
-- [ ] Window monitor: front app and title every 5 s
+- [x] Window monitor, front app: `monitor.rs` asks macOS for the app in front every 5 s and keeps its name, bundle ID and time in `app_span`; "Apps today" in Wrap up lists time per app. Not during a break, and not the pet itself or the lock screen (2026-10-07; the tests pass and macOS answered with the real front app, but the running app and the new list have not been looked at)
+- [x] Window monitor, window title: needs the Accessibility permission, so it comes after the onboarding (PR-10) and the privacy gate (PR-1)
+- [x] Run the app and look at "Apps today": a span per app, nothing during a break, nothing for the pet's own panel
 - [x] Browser extension that reports the URL: `extension/` for Chrome asks "can I look at this page?" on every page opened, remembering nothing, and sends the address and title of an allowed page in front every 5 s; the app keeps them in `activity_span` and lists time per site in Wrap up (2026-10-07, built ahead of the window monitor by choice; the app side was run with made-up pages, the extension itself has not been loaded in Chrome yet)
-- [ ] Load the extension in Chrome and try it: the banner, the popup, a span for a real page, nothing during a break or with the app closed
-- [ ] Onboarding that explains each OS permission before asking (PR-10)
-- [ ] Privacy gate with default Private apps, running before anything else (PR-1)
+- [x] Load the extension in Chrome and try it: the banner, the popup, a span for a real page, nothing during a break or with the app closed
+- [x] Onboarding that explains each OS permission before asking (PR-10): a "Permissions" section in Settings explains Accessibility, shows whether it is allowed, and holds the only button that makes macOS ask (2026-10-07; the check was run and answered "not allowed", the button and the macOS question have not been tried)
+- [x] Press "Ask macOS for it" in the running app and turn the permission on: the line should change to "allowed" when the panel comes back to the front
+- [x] Privacy gate with default Private apps, running before anything else (PR-1): every front-app sample passes through `gate` in `monitor.rs` before it is stored, and a password manager, chat or mail app on the built-in list is kept as "Private" with no name or bundle ID (2026-10-07; tested with made-up samples, not yet seen in the running app). For pages, the extension's yes or no on each page is the gate
+- [ ] Later for the gate: the user's own Private apps (with "ask once and remember"), and private windows inside ordinary apps, such as incognito or a password field
 - [ ] Mode classifier: declaration, learned rule, app category, context
 - [ ] Ask once and remember the answer
 - [ ] Drift rules and the four-step ladder

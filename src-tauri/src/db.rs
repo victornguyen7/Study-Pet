@@ -70,6 +70,13 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             domain TEXT NOT NULL,
             url TEXT NOT NULL,        -- without its #fragment
             title TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS app_span (
+            id INTEGER PRIMARY KEY,
+            started_at TEXT NOT NULL, -- UTC timestamp
+            ended_at TEXT NOT NULL,
+            app TEXT NOT NULL,        -- the name the Dock shows
+            bundle_id TEXT            -- such as 'com.apple.Safari'; some programs have none
         );",
     )?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;

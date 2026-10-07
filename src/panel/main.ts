@@ -457,22 +457,39 @@ run(async () => {
   sounds.checked = await invoke<boolean>("sounds");
 });
 
+// PR-10: macOS is only ever made to ask from this button, which sits under the explanation
+async function loadAccessibility(ask = false) {
+  const allowed = await invoke<boolean>("accessibility", { ask });
+  $("ax-status").textContent = allowed ? "allowed" : "not allowed";
+  $("ax-ask").hidden = allowed;
+}
+$("ax-ask").onclick = () => run(() => loadAccessibility(true));
+// the answer is given in System Settings, so look again when the panel comes back to the front
+window.addEventListener("focus", () => run(loadAccessibility));
+run(loadAccessibility);
+
 const titles = { idle: "", focus: "Focus", break: "Break", callback: "Break's over" };
 const level = document.querySelector<HTMLElement>(".level")!;
 
 // ---- the day: today's blocks, the wrap-up and the 7-day strip ----
 
-// Mirrors site_time_today() in src-tauri/src/browser.rs
-async function loadSites() {
-  const sites = await invoke<{ domain: string; seconds: number }[]>("site_time");
-  $("sites").replaceChildren(
-    ...sites.map((s) => {
+function timeRows(list: string, rows: [string, number][]) {
+  $(list).replaceChildren(
+    ...rows.map(([name, seconds]) => {
       const li = el("li");
-      li.append(el("span", s.domain), el("span", duration(s.seconds / 60)));
+      li.append(el("span", name), el("span", duration(seconds / 60)));
       return li;
     }),
   );
-  if (!sites.length) $("sites").append(el("li", "Nothing noted yet today.", "empty"));
+  if (!rows.length) $(list).append(el("li", "Nothing noted yet today.", "empty"));
+}
+
+// Mirrors site_time_today() in src-tauri/src/browser.rs and app_time_today() in monitor.rs
+async function loadSites() {
+  const sites = await invoke<{ domain: string; seconds: number }[]>("site_time");
+  timeRows("sites", sites.map((s) => [s.domain, s.seconds]));
+  const apps = await invoke<{ app: string; seconds: number }[]>("app_time");
+  timeRows("apps", apps.map((a) => [a.app, a.seconds]));
 }
 // the list also reloads by itself once a minute, with the rest of the day
 $("sites-refresh").onclick = () => run(loadSites);

@@ -18,7 +18,7 @@ use crate::db::Db;
 // hands the bytes to the socket below, so nothing is recorded unless this app is running.
 
 /// Two samples further apart than this are not joined: Chrome lost focus, the laptop slept, or a break came between.
-const GAP_SECS: i64 = 15;
+pub(crate) const GAP_SECS: i64 = 15;
 /// C-4: set by the timer thread during a break; samples are dropped while it is set.
 pub(crate) static PAUSED: AtomicBool = AtomicBool::new(false);
 

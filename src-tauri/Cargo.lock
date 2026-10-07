@@ -2537,6 +2537,8 @@ name = "pet"
 version = "0.2.0"
 dependencies = [
  "chrono",
+ "core-foundation",
+ "objc2",
  "objc2-app-kit",
  "rusqlite",
  "serde",
