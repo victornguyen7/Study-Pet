@@ -86,7 +86,7 @@ flowchart TD
 - [x] Upload an exported .ics file where a calendar has no address
 - [x] Pixel-slime pet with closed and open eyes, shown in the panel and as the app icon
 - [x] Look at the new pet in the real window: focus block (eyes open), call back (hop), a milestone star
-- [x] Rebuild and reinstall the everyday app so it gets the new pet and icon (done 2026-10-04, on 2026-10-05 from commit `c90c6af`, and three times on 2026-10-07, the last with the Phase 3 work so far; do it again after any change it should get, and back up its `pet.db` first)
+- [x] Rebuild and reinstall the everyday app so it gets the new pet and icon (done 2026-10-04, on 2026-10-05 from commit `c90c6af`, and four times on 2026-10-07, the last with the Phase 3 work so far and signed; do it again after any change it should get, and back up its `pet.db` first)
 - [x] Commit the new pet, icon and docs; the installed app was built from uncommitted files
 - [x] Set the version to 0.2.0 in `package.json`, `Cargo.toml` and both Tauri configs
 - [x] Wake-up splash from the logo design (optional; in `pet.css`, not yet looked at in the real window)

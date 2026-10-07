@@ -21,6 +21,7 @@
 - A crash while reading one feed no longer fails every feed. It is that source's own error and shows only the kind of error ("the task fetcher failed: KeyError"), never Python's own message.
 - A panic while a lock is held no longer makes every later call panic. The database and sync locks go through `lock` in `db.rs`; the sidecar's lock starts a fresh Python process.
 - The dev and the everyday app no longer take the Chrome extension from each other. Each has its own native-messaging host, named after its identifier, and the extension (0.2.1) tries the everyday app first, then the dev build.
+- The everyday app keeps its Accessibility permission across reinstalls: it is signed with a self-signed certificate, "Study Pet Local Signing", kept in the login keychain and named in `tauri.daily.conf.json`.
 
 **Removed**
 - The `backend_call` command, which let a window call any sidecar method with any arguments. Nothing used it.

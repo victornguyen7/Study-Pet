@@ -405,6 +405,12 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** nothing leads a new user to the section, and the permission is asked for before anything uses it. Run with `npm run tauri dev`, macOS may name the terminal that started the app instead of Study Pet.
 - **Revisit when:** the window title is read (the pet should then point at the section once), and Phase 4, which adds screen recording.
 
+### The everyday build is signed with a self-signed certificate
+- **Why:** added on 2026-10-07. macOS ties a permission to how the app is signed. Unsigned, that was the hash of the program file, so every reinstall lost the Accessibility permission while System Settings still showed it switched on. A certificate that stays the same makes the app's identity its identifier plus that certificate.
+- **Detail:** "Study Pet Local Signing" is in the login keychain and named in `bundle.macOS.signingIdentity` in `tauri.daily.conf.json`. The hardened runtime is off, as it was unsigned. The dev config is not signed.
+- **Gave up:** the build now works only on a laptop that has the certificate. It is not an Apple Developer ID, so another Mac would still refuse to open the app.
+- **Revisit when:** the app goes to anyone else (a Developer ID and notarization), or Phase 4 adds the screen recording permission, which is kept the same way.
+
 ### The privacy gate is a built-in list of apps, and a Private app keeps no name
 - **Why:** built on 2026-10-07. The gate runs on each front-app sample before it reaches the database (PR-1), so a Private app's name is never stored and then removed. The spec says both "labeled by app name only" and "only private time, N minutes" for Private; the stricter one was taken, so all Private apps share one "Private" row.
 - **Detail:** the list is `PRIVATE_APPS` in `monitor.rs`, matched by bundle ID: password managers, messaging and mail. For pages the gate is the extension's question on every page.
