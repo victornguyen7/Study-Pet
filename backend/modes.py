@@ -30,7 +30,13 @@ BROWSERS = {
 }
 ASK_SECS = 180  # an app or site nothing knows is asked about once it has had this long in front today
 
-_CATEGORY = {key.lower(): mode for mode, keys in CATEGORIES.items() for key in keys}
+# Background audio (spec "Background audio"): a music app or site never changes the mode. In front it
+# has no label of its own, so it takes the label around it, and it is never asked about.
+MUSIC = [
+    "com.spotify.client", "com.apple.Music", "open.spotify.com", "music.youtube.com", "soundcloud.com",
+    "music.apple.com",
+]
+_CATEGORY = {key.lower(): mode for mode, keys in (CATEGORIES | {"music": MUSIC}).items() for key in keys}
 
 
 def key(span):
@@ -47,7 +53,8 @@ def category(span):
 
 
 def classify(span, declared=None, rules=None, in_session=False):
-    """-> (mode or None, source). source is the spec's label source: declared, learned, rule or context."""
+    """-> (mode or None, source). source is the spec's label source: declared, learned, rule or context,
+    or "music" for a music app or site, which has no mode."""
     if span.get("app") == "Private" and not span.get("bundle_id"):
         return "private", "rule"
     if declared:
@@ -55,7 +62,7 @@ def classify(span, declared=None, rules=None, in_session=False):
     if learned := (rules or {}).get(key(span)):
         return learned, "learned"
     if mode := category(span):
-        return mode, "rule"
+        return (None, "music") if mode == "music" else (mode, "rule")
     if in_session:
         return "study", "context"
     return None, None
@@ -100,12 +107,13 @@ def _fixed(span):
 
 
 def _merge(spans):
-    """Joins neighbors with the same label; the first one's source is kept."""
+    """Joins neighbors with the same label; the first one's source is kept, and every name in `what`."""
     out = []
     for s in spans:
         last = out[-1] if out else None
         if last and last["mode"] == s["mode"] and _fixed(last) == _fixed(s) and s["start"] - last["end"] <= GAP_SECS:
             last["end"] = s["end"]
+            last["what"] = last["what"] + [w for w in s["what"] if w not in last["what"]]
         else:
             out.append(dict(s))
     return out
@@ -133,16 +141,17 @@ def smooth(spans):
 def label_day(apps, pages, sessions=(), declarations=(), rules=None):
     """apps: [{start, end, app, bundle_id}], pages: [{start, end, domain}], sessions: [{start, end}],
     declarations: [{start, end, mode}], rules: {key: mode}. Times are epoch seconds.
-    -> {"spans": [{start, end, mode, source}], "totals": {mode or "unknown": seconds},
+    -> {"spans": [{start, end, mode, source, what: the apps and sites in it}], "totals": {mode or "unknown": seconds},
         "unknown": [{key, name, seconds}], longest first: what to ask the user about}"""
     labeled, unknown = [], {}
     for span in _cut(timeline(apps, pages), [*sessions, *declarations]):
         declared = _covering(declarations, span)
         mode, source = classify(span, declared and declared["mode"], rules, bool(_covering(sessions, span)))
-        labeled.append({"start": span["start"], "end": span["end"], "mode": mode, "source": source})
+        what = span.get("domain") or span["app"]
+        labeled.append({"start": span["start"], "end": span["end"], "mode": mode, "source": source, "what": [what]})
         # a guess from context is still a guess, so it is asked about too
         if source in (None, "context", "declared") and key(span) not in BROWSERS | (rules or {}).keys() and not category(span):
-            ask = unknown.setdefault(key(span), {"key": key(span), "name": span.get("domain") or span["app"], "seconds": 0})
+            ask = unknown.setdefault(key(span), {"key": key(span), "name": what, "seconds": 0})
             ask["seconds"] += span["end"] - span["start"]
     spans = smooth(labeled)
     totals = {}

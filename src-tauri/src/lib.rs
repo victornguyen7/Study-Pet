@@ -90,6 +90,7 @@ pub fn run() {
                     }
                     // once a minute, so "today" rolls over at midnight while the pet stays open
                     if second % 60 == 0 {
+                        let idle = state.as_ref().is_ok_and(|s| s["phase"] == "idle");
                         // a task that has become due soon is mentioned by the pet, but never during a focus
                         // block: it waits, unmarked, and the first check after the block ends picks it up
                         if state.is_ok_and(|s| s["phase"] != "focus") {
@@ -97,7 +98,11 @@ pub fn run() {
                             match text {
                                 Ok(Some(text)) => drop(handle.emit("reminder", text)),
                                 // nothing due: an app or site the pet cannot place is asked about, once each
-                                Ok(None) => match modes::question(&handle) {
+                                // S-7: and with no question either, study outside a session gets an offer
+                                Ok(None) => match modes::question(&handle).and_then(|q| match q {
+                                    None if idle => modes::offer(&handle),
+                                    q => Ok(q),
+                                }) {
                                     Ok(Some(text)) => drop(handle.emit("reminder", text)),
                                     Ok(None) => {}
                                     Err(e) => eprintln!("mode question failed: {e}"),
@@ -123,13 +128,19 @@ pub fn run() {
                 std::thread::sleep(std::time::Duration::from_secs(30 * 60));
             });
 
-            // P-1: one shortcut hides/shows the pet
+            // P-1: one shortcut hides/shows the pet. PR-3: another makes it look away for 15 minutes.
             #[cfg(desktop)]
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
-                    .with_shortcuts(["alt+shift+p"])?
-                    .with_handler(|app, _shortcut, event| {
+                    .with_shortcuts(["alt+shift+p", "alt+shift+l"])?
+                    .with_handler(|app, shortcut, event| {
                         if event.state != tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                            return;
+                        }
+                        #[cfg(unix)]
+                        if shortcut.key == tauri_plugin_global_shortcut::Code::KeyL {
+                            // the pet hears until when (epoch seconds); 0 means it is watching again
+                            let _ = app.emit("away", browser::look_away(chrono::Utc::now().timestamp()));
                             return;
                         }
                         if let Some(pet) = app.get_webview_window("pet") {
@@ -184,6 +195,7 @@ pub fn run() {
             modes::modes_today,
             modes::declared_mode,
             modes::learned,
+            modes::keeper,
             #[cfg(unix)]
             browser::site_time,
             #[cfg(target_os = "macos")]
@@ -247,6 +259,37 @@ mod tests {
             assert_eq!(site_time_today(&conn).unwrap(), [json!({ "domain": "canvas.edu", "seconds": 10 }), json!({ "domain": "docs.rs", "seconds": 5 })]);
         }
 
+        // PR-1: the extension's "private" holds for two samples, and a "not private" ends it at once
+        use browser::{chrome_private, note_private};
+        assert!(!chrome_private(t));
+        note_private(true, t);
+        assert!(chrome_private(t + 10) && !chrome_private(t + 11));
+        note_private(false, t + 5);
+        assert!(!chrome_private(t + 6));
+
+        // the ladder, through the sidecar: nothing is drift without a focus block, and Steam is with one
+        let mut sidecar = spawn_sidecar().unwrap();
+        let steam = json!({ "app": "Steam", "bundle_id": "com.valvesoftware.steam", "domain": null, "url": null, "rules": {}, "declared": null });
+        let idle = json!({ "step": 0, "seconds": 0, "what": null, "returned": false, "mode": "relax" });
+        assert_eq!(call(&mut sidecar, "drift", Some(steam.clone())).unwrap(), idle);
+        call(&mut sidecar, "timer", Some(json!({ "action": "start_focus", "focus_min": 25, "break_min": 5 }))).unwrap();
+        assert_eq!(call(&mut sidecar, "drift", Some(steam.clone())).unwrap()["what"], "Steam");
+        let mut relaxing = steam;
+        relaxing["declared"] = json!("relax");
+        assert_eq!(call(&mut sidecar, "drift", Some(relaxing)).unwrap(), idle);
+        // an app nothing knows is Study by context while the block runs; this is what the pet's face follows
+        let preview = json!({ "app": "Preview", "bundle_id": "com.apple.Preview", "rules": {}, "declared": null });
+        assert_eq!(call(&mut sidecar, "drift", Some(preview)).unwrap()["mode"], "study");
+        // PR-11: audio is on for two samples after the extension last said so
+        assert!(!browser::audio_on(t));
+
+        // PR-3: the shortcut starts 15 minutes of looking away, and pressing it again ends them
+        assert!(!browser::paused(t));
+        assert_eq!(browser::look_away(t), t + 900);
+        assert!(browser::paused(t + 899) && !browser::paused(t + 900));
+        assert_eq!(browser::look_away(t + 10), 0);
+        assert!(!browser::paused(t + 11));
+
         // frames as Chrome sends them; an oversized length ends the reading
         let frame = |body: &str| [&(body.len() as u32).to_ne_bytes()[..], body.as_bytes()].concat();
         let bytes = [frame(r#"{"url":"u"}"#), frame("{}"), u32::MAX.to_ne_bytes().to_vec(), frame("{}")].concat();
@@ -293,6 +336,7 @@ mod tests {
     fn real_front_app() {
         let front = std::thread::spawn(monitor::front_app).join().unwrap();
         println!("accessibility allowed: {}", monitor::accessibility(false)); // only checks, never asks
+        println!("password field has the keyboard: {}", monitor::password_field_focused());
         println!("{front:?}");
         assert!(front.is_some_and(|(name, _)| !name.is_empty()));
     }
@@ -329,6 +373,14 @@ mod tests {
         }
         declare(&conn, None).unwrap();
         assert_eq!(declared(&conn).unwrap(), None);
+
+        // S-7: an offer needs 5 minutes of Study that is still going
+        let day = |mode: &str, start: i64, end: i64| json!({ "spans": [{ "mode": "relax", "start": 0, "end": 10 }, { "mode": mode, "start": start, "end": end }] });
+        assert!(modes::studying(&day("study", 1000, 1300), 1330));
+        for (mode, start, end, at) in [("study", 1000, 1299, 1330), ("study", 1000, 1300, 1400), ("relax", 1000, 1300, 1330)] {
+            assert!(!modes::studying(&day(mode, start, end), at));
+        }
+        assert!(!modes::studying(&json!({ "spans": [] }), 0));
 
         // PR-2: each unknown is brought up once, and stays out of the rules until it is answered
         let unknown = json!([{ "key": "preview", "name": "Preview", "seconds": 300 }, { "key": "canvas.school.edu", "name": "canvas.school.edu", "seconds": 200 }]);

@@ -5,7 +5,16 @@
 **Changed**
 - The Chrome extension (now 0.2.0) asks once per site and remembers the answer, where it asked on every page. Answers are kept in Chrome's storage by site; the popup lists every answered site, where each can be switched between yes and no or forgotten.
 
+- Private windows in ordinary apps (PR-1): time is recorded as "Private" while a password field has the keyboard in any app, while a Chrome incognito window is in front, and while the page in front shows a password field. The extension (0.3.0) now tells the app with every sample whether Chrome's front window is private, and never sends such a page.
+
 **Added**
+- Time balance in the Wrap up view: seconds per mode today, and each labeled stretch of a minute or more with its times, label and the apps and sites in it.
+- Drift ladder step 4, off by default: after 10 minutes of drift on a site the app asks the extension (0.5.0) to cover its pages for 5 minutes. "Focus keeper" in Settings holds the switch and the pet's voice: Gentle, Sassy or Roast. New command `keeper`.
+- Look-away shortcut (PR-3): Option-Shift-L pauses all noting for 15 minutes; pressing it again ends that.
+- The pet offers to start a focus block after 5 minutes of Study with no session running (S-7), at most once in half an hour.
+- Pet states: Relaxing, Headphones, Nudging and Happy (`pet.css`, `headphones.svg`). The "drift" event now also carries the mode of what is in front and whether audio is on; the extension (0.4.0) reports that some tab is playing, never which.
+- Background-audio rules: music apps and sites have no mode of their own, so time in them takes the label around it and the pet never asks about them. In front during a focus block they get 60 seconds of grace before the drift ladder starts.
+- Drift ladder, steps 1 to 3 (`backend/drift.py`): during a focus block the pet glances after 30 seconds on a Relax app or site, speaks after 2 minutes, and sits in the middle of the screen after 5, then welcomes the user back. YouTube's home page, feeds and Shorts count as drift; a video does not. The monitor sends each sample to the sidecar and the pet hears changes as a "drift" event.
 - Chrome extension in `extension/` (load it unpacked): on every page opened it asks "can I look at this page?", and for an allowed page in front sends its address and title to the app every 5 seconds. No answer is remembered: a yes covers that page in that tab until the tab goes somewhere else. Its popup says whether the app is connected.
 - The app receives pages by native messaging (`browser.rs`): a Unix socket `ext.sock` and a host script `chrome-host.sh` beside `pet.db`, and a host manifest written into Chrome's folder at launch. Nothing is recorded while the app is closed or during a break.
 - New table `activity_span` (start, end, site, address, title) and command `site_time`. "Sites today" in the Wrap up view lists time per site.

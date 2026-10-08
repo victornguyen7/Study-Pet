@@ -89,3 +89,71 @@ body {
   font-size: 14px;
   letter-spacing: 2px;
 }
+
+/* ---- States, set as classes by main.ts. Idle, Watching and Break are the plain slime above. ---- */
+
+/* Relaxing: something Relax is in front and no focus block runs. The slime lies down, eyes shut.
+   `scale`, `rotate` and `translate` are used on their own so they add to each other and to the splash. */
+#pet {
+  transform-origin: bottom;
+  transition: scale 0.4s;
+}
+
+#pet.relaxing {
+  scale: 1 0.72;
+}
+
+/* Headphones: audio is on. Drawn on the same 24 x 16 grid as the slime. */
+#headphones {
+  position: absolute;
+  inset: 0;
+  background: url("./headphones.svg") 0 0 / contain;
+  visibility: hidden;
+}
+
+#pet.headphones #headphones {
+  visibility: visible;
+}
+
+/* Happy: the user came back from drift. Eyes open, whatever the timer says. */
+#pet.happy {
+  background-image: url("./open.svg");
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Nudging: drift has reached the speech bubble. The slime rocks until the user is back. */
+  #pet.nudging {
+    animation: rock 1.2s ease-in-out infinite;
+  }
+
+  #pet.happy {
+    animation: hop 0.4s ease-in-out infinite;
+  }
+
+  /* the music's beat */
+  #pet.headphones:not(.nudging, .happy) {
+    animation: bob 0.9s steps(2) infinite;
+  }
+}
+
+@keyframes rock {
+  25% {
+    rotate: -4deg;
+  }
+  75% {
+    rotate: 4deg;
+  }
+}
+
+@keyframes hop {
+  50% {
+    translate: 0 -10px;
+  }
+}
+
+@keyframes bob {
+  50% {
+    translate: 0 2px;
+  }
+}
+

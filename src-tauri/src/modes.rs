@@ -1,6 +1,6 @@
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::db::{lock, Db};
 use crate::sidecar::{sidecar_call, Backend};
@@ -47,15 +47,19 @@ pub(crate) fn mode_input(conn: &Connection) -> rusqlite::Result<Value> {
         "apps": list(&format!("{span}, 'app', app, 'bundle_id', bundle_id"), &format!("app_span WHERE {today}"))?,
         "pages": list(&format!("{span}, 'domain', domain"), &format!("activity_span WHERE {today}"))?,
         "sessions": list(span, &format!("session WHERE ended_at IS NOT NULL AND {today}"))?,
-        "rules": conn
-            .query_row("SELECT json_group_object(key, mode) FROM app_rule WHERE mode IS NOT NULL", [], |r| r.get::<_, String>(0))
-            .map(|text| serde_json::from_str::<Value>(&text).unwrap_or_default())?,
+        "rules": rule_map(conn)?,
         // one still in force runs until now
         "declarations": list(
             "'start', unixepoch(started_at), 'end', unixepoch(coalesce(ended_at, 'now')), 'mode', mode",
             "mode_declaration WHERE ended_at IS NULL OR date(ended_at, 'localtime') = date('now', 'localtime')",
         )?,
     }))
+}
+
+/// The answered rules as { key: mode }, the shape backend/modes.py takes.
+pub(crate) fn rule_map(conn: &Connection) -> rusqlite::Result<Value> {
+    conn.query_row("SELECT json_group_object(key, mode) FROM app_rule WHERE mode IS NOT NULL", [], |r| r.get::<_, String>(0))
+        .map(|text| serde_json::from_str(&text).unwrap_or_default())
 }
 
 /// Today's labeled stretches and the seconds per mode.
@@ -138,4 +142,53 @@ pub(crate) fn learned(db: State<Db>, key: Option<String>, name: Option<String>, 
         .map_err(|e| e.to_string())?;
     }
     rules(&conn).map_err(|e| e.to_string())
+}
+
+// ---- Focus keeper settings: the voice of the pet's lines, and the opt-in block (ladder step 4) ----
+
+/// { personality: "gentle" | "sassy" | "roast", block: bool }. Pass either to change it; every window
+/// hears the new settings as a "keeper" event.
+#[tauri::command]
+pub(crate) fn keeper(app: AppHandle, personality: Option<String>, block: Option<bool>) -> Result<Value, String> {
+    let db = app.state::<Db>();
+    let conn = lock(&db.0);
+    let set = |key: &str, value: &str| conn.execute("INSERT OR REPLACE INTO setting (key, value) VALUES (?1, ?2)", (key, value));
+    if let Some(p) = personality.filter(|p| ["gentle", "sassy", "roast"].contains(&p.as_str())) {
+        set("personality", &p).map_err(|e| e.to_string())?;
+    }
+    if let Some(on) = block {
+        set("block_drift", if on { "1" } else { "0" }).map_err(|e| e.to_string())?;
+    }
+    let get = |key: &str| crate::db::setting(&conn, key).map_err(|e| e.to_string());
+    let state = json!({
+        "personality": get("personality")?.unwrap_or_else(|| "gentle".into()),
+        "block": get("block_drift")?.as_deref() == Some("1"),
+    });
+    app.emit("keeper", &state).map_err(|e| e.to_string())?;
+    Ok(state)
+}
+
+// ---- S-7: study with no session running, and the pet offers to start one ----
+
+const OFFER_AFTER_SECS: i64 = 5 * 60;
+const OFFER_EVERY_SECS: i64 = 30 * 60;
+static LAST_OFFER: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+/// Whether `day` (from label_day) ends in Study that has lasted 5 minutes and is still going at `now`.
+pub(crate) fn studying(day: &Value, now: i64) -> bool {
+    day["spans"].as_array().and_then(|spans| spans.last()).is_some_and(|last| {
+        let (start, end) = (last["start"].as_i64().unwrap_or(0), last["end"].as_i64().unwrap_or(0));
+        last["mode"] == "study" && now - end <= 60 && end - start >= OFFER_AFTER_SECS
+    })
+}
+
+/// The pet's offer, at most once in half an hour. Call it only while no session is running.
+pub(crate) fn offer(app: &AppHandle) -> Result<Option<String>, String> {
+    let now = chrono::Utc::now().timestamp();
+    let last = LAST_OFFER.load(std::sync::atomic::Ordering::Relaxed);
+    if now - last < OFFER_EVERY_SECS || !studying(&modes_today(app.clone())?, now) {
+        return Ok(None);
+    }
+    LAST_OFFER.store(now, std::sync::atomic::Ordering::Relaxed);
+    Ok(Some("Looks like you're studying. Open the panel to start a focus block?".into()))
 }

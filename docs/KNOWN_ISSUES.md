@@ -1,7 +1,7 @@
 # Known issues and risks
 
 What is wrong, unfinished or fragile today, and what it will cost if it is left. Highest cost first within each group.
-The reasoning behind each choice is in `DECISIONS.md`. Last reviewed 2026-10-07, with the items that could harm the code checked against it after the first half of Phase 3 was built.
+The reasoning behind each choice is in `DECISIONS.md`. Last reviewed 2026-10-07, with the items that could harm the code checked against it after the first half of Phase 3 was built. The rest of Phase 3 was built the same day; its limits are items 65 to 78, written by the builder and not yet checked against a running app.
 
 ## What to do first
 
@@ -12,7 +12,7 @@ Reviewed 2026-10-07. Item numbers refer to the lists below.
 - Items 41, 45 and 46: click through the task start button, "Finished it?", the reminder bubble and "Did you submit it?" in the real window.
 - Item 1: delete the three oldest backups after a few good days (the last reinstall was 2026-10-07) and take the address out of `.env`.
 
-**Before the rest of Phase 3 (drift ladder)**
+**Before the Phase 3 gate (the build is done; nothing below has been tried by hand)**
 - Item 23 was done on 2026-10-07: `lib.rs` is split into modules. Run the app once to confirm nothing changed.
 - Item 22 was fixed on 2026-10-07.
 - Items 40, 42, 43 and 46: the drift ladder needs a bubble that can be clicked; fix these with it.
@@ -20,6 +20,10 @@ Reviewed 2026-10-07. Item numbers refer to the lists below.
 - Item 53 was fixed on 2026-10-07. Reload the extension on `chrome://extensions` so it runs 0.2.1.
 - Item 56: idle time counts, and the drift ladder needs honest numbers.
 - Item 60: reload the extension and try the once-per-site question.
+- Item 65 first: the hand test of everything built on 2026-10-07. It includes what items 60, 63 and 64 asked for.
+- Item 66: the Phase 3 gate can only be judged on the same day, in the Wrap up view.
+- Items 56, 61 and 67: idle time, the short category list and the focus-block-only keeper are the three most likely to make the test day's labels or nudges wrong.
+- Item 71: both global shortcuts are fixed keys, and the dev app and the everyday app ask for the same ones.
 - The fixed hide shortcut (see "Older items") matters once the look-away shortcut is added. No content security policy can wait: nothing in `src/` or `extension/` builds HTML from text.
 
 **Before Phase 4 (capture)**
@@ -160,11 +164,56 @@ Reviewed 2026-10-07. Item numbers refer to the lists below.
 57. **A declared mode lasts until it is changed, even overnight.** "Relax" left on in the evening labels the next morning Relax, and declared time is never relabeled.
     *Fix:* end it at a new focus block or at midnight.
 58. **A rule covers one exact site.** An answer for `example.com` does not cover `www.example.com`, in the app or in the extension, so each is asked about separately; making one Private leaves the other recorded. The extension's yes and no list and the app's `app_rule` are also two lists that can disagree: a site made Private in the app is dropped by the app whatever the extension was told, but a no in the extension is not known to the app.
-59. **The gate knows apps and sites, not windows.** An app that is not on the built-in list is named in `app_span` before the user has been asked about it. An incognito window or a screen with a password field cannot be told apart from the rest of its app. Forgetting a Private rule does not bring the old names back.
-60. **The once-per-site question has not been tried in Chrome.** The extension's 0.2.0 was syntax-checked only (`ROADMAP.md`, Phase 3). The labels from the classifier are shown nowhere yet except as questions, so a wrong label cannot be seen.
+59. **The gate knows apps and sites, not windows.** An app that is not on the built-in list is named in `app_span` before the user has been asked about it. Private windows inside ordinary apps are covered by item 63. Forgetting a Private rule does not bring the old names back.
+60. **The once-per-site question was syntax-checked only when it was built.** It has since been used in Chrome (`ROADMAP.md`, Phase 3). The labels from the classifier are now shown in the Wrap up view (item 66).
 61. **The category list is short and fixed in code.** YouTube is on neither side, so it is unknown unless a focus block runs. The gate's test day will show what is missing.
 62. **Fixed 2026-10-07: every reinstall of the everyday app lost the Accessibility permission.** The app was not signed with a certificate, so macOS knew it by the hash of its program file, which changes with every build; the old entry stayed in System Settings looking switched on while the new build was refused. The everyday build is now signed with a self-signed certificate, "Study Pet Local Signing", in the login keychain (`bundle.macOS.signingIdentity` in `tauri.daily.conf.json`), so macOS knows it by its identifier and that certificate. Not yet seen: a second reinstall keeping the permission.
     *What is left:* the certificate exists only on this laptop and runs out in October 2036. Without it the build fails at the signing step; make a new one in Keychain Access (Certificate Assistant, "Code Signing") with the same name, and give the permission once more. If the permission is ever refused again while it looks switched on, run `tccutil reset Accessibility com.hiennguyen.pet` and switch it on again. The dev build is not signed; run from a terminal, macOS asks about the terminal.
+63. **Private windows are found by three checks, each with holes (built 2026-10-07, none seen working on a real span).** A sample is kept as "Private" while a password field has the keyboard in any app, while a Chrome incognito window is in front, and while the page in front in Chrome shows a password field.
+    - *Too much is Private:* Chrome in front with every window minimized, or with a separate DevTools window focused, looks the same as incognito to the extension and is counted as Private.
+    - *Other browsers:* a private window in Safari, Firefox or any browser but Chrome is not detected, and is recorded under the browser's name.
+    - *Password fields outside Chrome:* only the field that has the keyboard is noticed, and only with the Accessibility permission on. One that is on screen but not being typed in is missed, and so is one in an app that tells macOS nothing about its fields.
+    - *Password fields in Chrome:* one inside an embedded frame of a page is missed, and a tab open since before the extension was loaded is not checked until its second sample.
+    - *Switching back to Chrome* can label one 5-second sample the wrong way, since the app trusts the extension's last answer for 10 seconds.
+    - *The extension now reads one thing from a page:* whether a password field is visible. Before, it read nothing.
+    *Cost if left:* a sign-in or a private window in the uncovered cases is recorded under the app's name (never its content), and some ordinary Chrome time is hidden as Private. *Fix:* window titles, an extension for the other browsers, and trying all three checks in the running app (`ROADMAP.md`, Phase 3).
+64. **The drift ladder has only been tested as rules (built 2026-10-07).** The glance, the bubble, the move to the middle of the screen and the way home have not been seen in the running app. The move home is worked out from where the slime's feet were; if the bubble's size changes at the same moment, or the pet is dragged while it sits, it can come back a little off or stay where it was dragged.
+    *Also:* one sample that is not drift resets the ladder, so a 5-second look at the notes starts it again; at step 3 the pet sits in the middle of the screen, not on the distracting window. Steps 4 and the voices came later: items 68 and 69.
+
+## Phase 3: finished on 2026-10-07, not yet tried by hand
+
+Everything here was built in one day and checked by tests, a type check and a build. Unless an item says otherwise, it has not been seen working in the running app.
+
+65. **The hand test.** Reload the extension on `chrome://extensions` (it should say 0.5.0), rebuild the app, then:
+    - *Apps and privacy:* "Apps today" lists apps by name; Messages or Mail shows as "Private". An incognito window, a sign-in page in Chrome, and a password prompt in another app each add to "Private".
+    - *Questions:* an unknown app in front for 3 minutes brings one bubble and a row in Today under "What are these for?"; an answer moves it to Settings, "What the pet has learned"; Forget brings the question back.
+    - *Declaration:* "Right now I'm relaxing" turns the keeper off and labels the time Relax; switch it back afterwards (item 57).
+    - *Ladder:* in a focus block, stay on a Relax site: a lean at 30 s, a bubble at 2 min, the pet in the middle of the screen at 5 min, "Welcome back" and the pet home again on return. Try each voice in Settings.
+    - *Block:* tick "block that site" in Settings and drift for 10 minutes: every page on the site is covered for 5 minutes, also after a reload.
+    - *Music:* Spotify in front for under a minute does nothing; left in front, the ladder starts a minute late.
+    - *Faces:* headphones while a Chrome tab plays; lying down on a Relax site with no block running; eyes shut in a block while a Private app is in front.
+    - *Look away:* Option-Shift-L shuts the eyes and says until when; nothing is added to "Apps today" or "Sites today" meanwhile; the same keys bring it back.
+    - *Offer:* with no session, 5 minutes on a course site brings "Looks like you're studying".
+    - *Wrap up:* "Time by mode today" adds up to about the time at the laptop, and "Stretches" reads like the day.
+66. **The gate can only be judged on the day itself.** "Stretches" and "Time by mode today" are worked out from today's rows each time they are shown; there is no view of an earlier day, and nothing is stored. A stretch under a minute is not listed, and a stretch names at most three of the things in it.
+    *Also:* labels are not fixed. An answer given in the evening relabels the whole day, so a stretch judged wrong at noon can read right by night. Judge the 10 stretches before answering questions, or note which answers were given.
+    *Fix:* a day picker over the same command, which already takes whatever rows it is given.
+67. **The focus keeper works only inside a focus block.** The spec has it on for all Study and Work time. Outside a block nothing nudges, whatever is in front. Inside one, drift is only what is Relax by the built-in list or by the user's answer, plus YouTube's home page, feeds and Shorts. An unknown app, a Private app, a YouTube video and any site the extension was told "no" about are never drift.
+    *Cost if left:* the ladder is quiet in exactly the cases the short category list misses (item 61). Time away from the keyboard on a Relax page counts as drift (item 56).
+68. **The block (ladder step 4) is easy to get around and cannot be lifted.** It covers a site's pages in Chrome for 5 minutes. It does nothing for an app, another browser or an incognito window; it is by exact host, so `m.example.com` stays open when `www.example.com` is blocked; and the cover can be deleted from the page with developer tools. It works only for a site the extension was told "yes" about, since the app must know which site is in front. With two Chrome profiles connected, only the one that connected last is told.
+    *Also:* once started it runs its 5 minutes even if the user goes back to the task, the focus block ends or the box in Settings is unticked. Closing Chrome ends it. It starts once, as the ladder reaches 10 minutes; a ladder that was reset by one glance elsewhere never gets there.
+69. **The voices are three fixed sets of lines.** They cover the ladder's bubble, the sitting line and the welcome back. Break lines, reminders, questions and the offer sound the same in every voice. Sassy and Roast were written to speak only of time, the site and the task, and have been read by nobody but their author.
+70. **Looking away is easy to miss and easy to lose.** The only signs are a bubble for 6 seconds and shut eyes, which is also how the pet looks when no block is running; the panel says nothing. The 15 minutes are kept in memory, so quitting the app ends them. The focus block's timer keeps counting, and that time still goes to the streak. The extension keeps sending and keeps asking about new sites; the app drops what arrives.
+71. **Two fixed global shortcuts.** Option-Shift-P and Option-Shift-L cannot be changed. If another program, or a second copy of this app (the dev build beside the everyday one), already holds either, the app may fail at launch or the keys may do nothing; this was not tried.
+    *Fix:* a field in Settings, and a launch that survives a refused shortcut.
+72. **The offer to start a session leans on the category list.** It needs 5 minutes labeled Study, which without a session means a site or app on the built-in list or one the user has answered for. It comes at most once in half an hour, counted in memory, so a restart can repeat it. It uses the same bubble as reminders and questions, so a reminder that is due wins, and the bubble only points to the panel.
+73. **The window title is not read (C-1), though its task is ticked in the roadmap.** The Accessibility permission is used for one thing: whether the keyboard is in a password field. The Permissions text in Settings still says titles will be read. Nothing would use a title today, and it is the most private thing the monitor could store.
+    *Cost if left:* two documents in one app cannot be told apart, so Preview is Study or Relax as a whole.
+74. **Only Chrome's audio is noticed, and nothing is logged.** Music from Spotify or Apple Music puts no headphones on. PR-11's "audio on" log is not kept: the app holds one true or false for 10 seconds. A YouTube video in front is unknown, music or lecture.
+75. **The pet's face follows single samples.** It can be 5 seconds behind, and it keeps its last state while the pet's own panel is in front, during a break and while looking away. Work has no look of its own and Sleeping is not built. With reduced motion on, the pet lies down and wears headphones but does not rock, hop or bob. The streak stars sit on the slime and are squashed with it when it lies down.
+76. **Parts of the spec's Phase 3 that were left out.** An Edge extension; YouTube's player state; feed patterns other than YouTube's (Reels and endless scrolling are covered only where the whole site is Relax); "suggest relaxing after 4 hours of study"; the optional relax limit; saved study playlists; a tagged task or a calendar class as context for the mode; `mode`, `tier` and `label source` columns on the spans (labels are worked out when shown). Noting does not pause in Relax mode (C-4): only names and time are kept there, as everywhere.
+77. **The sidecar is asked more often.** One call with every 5-second sample of the front app, one whole-day labeling each idle minute for the question and the offer, and one each time Wrap up or Today reloads. All share the one process with the timer, so a slow call delays the timer's tick (the lock in `sidecar.rs`). A day of spans is small; this has not been measured.
+78. **The app now writes to the extension's socket.** It sends one kind of message, the block. Any program that opens the socket (item 54) receives it too, and learns which site was blocked. The app does not check that the extension did what was asked.
 
 ## Setup traps
 

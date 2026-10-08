@@ -52,6 +52,8 @@ class ModesTest(unittest.TestCase):
             [page(0, 10, "canvas.school.edu"), page(10, 12, "reddit.com"), page(12, 22, "canvas.school.edu"), page(22, 27, "netflix.com")],
         )
         self.assertEqual(labels(day)[:2], [(0, 22, "study", "rule"), (22, 60, "relax", "rule")])
+        # each stretch names what was in it, the detour too, so the user can judge the label
+        self.assertEqual([s["what"] for s in day["spans"]], [["canvas.school.edu", "reddit.com"], ["netflix.com", "Chrome"]])
         self.assertEqual(day["totals"], {"study": 22 * MIN, "relax": 38 * MIN})
 
     def test_two_short_stretches_of_one_mode_add_up(self):
@@ -97,3 +99,13 @@ class ModesTest(unittest.TestCase):
             {"key": "news.example.com", "name": "news.example.com", "seconds": 5 * MIN},
         ])
         self.assertEqual(labels(day)[-1], (50, 60, "work", "learned"))
+
+    def test_music_never_changes_the_mode(self):
+        spotify = app(0, 1, "Spotify", "com.spotify.client")
+        self.assertEqual(classify(spotify), (None, "music"))
+        self.assertEqual(classify(spotify, in_session=True), (None, "music"))
+        self.assertEqual(classify(page(0, 1, "open.spotify.com")), (None, "music"))
+        self.assertEqual(classify(spotify, rules={"com.spotify.client": "relax"}), ("relax", "learned"))
+        # 10 min picking songs in the middle of study is still study, and the pet does not ask about it
+        day = label_day([app(10, 20, "Spotify", "com.spotify.client")], [page(0, 10, "a.edu"), page(20, 30, "a.edu")])
+        self.assertEqual((labels(day), day["unknown"]), ([(0, 30, "study", "rule")], []))

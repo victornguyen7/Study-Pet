@@ -1,11 +1,11 @@
-use std::sync::atomic::Ordering;
 
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::browser::{GAP_SECS, PAUSED};
+use crate::browser::{paused, GAP_SECS};
 use crate::db::{lock, Db};
+use crate::sidecar::{sidecar_call, Backend};
 
 // ---- Front app (C-1, C-3): which app is in front, and for how long ----
 //
@@ -14,6 +14,8 @@ use crate::db::{lock, Db};
 // and a title can hold a chat's name or a document's.
 
 const SAMPLE_SECS: u64 = 5;
+/// Ladder step 4: how long a site stays blocked.
+const BLOCK_MIN: i64 = 5;
 
 /// The app in front, as its name and bundle ID. None for the pet itself and for the lock screen.
 pub(crate) fn front_app() -> Option<(String, Option<String>)> {
@@ -74,6 +76,36 @@ pub(crate) fn gate((name, bundle): (String, Option<String>)) -> (String, Option<
     }
 }
 
+const CHROME: &str = "com.google.Chrome";
+
+/// Whether the keyboard is in a password field, in any app. False without the Accessibility permission.
+// ponytail: the field with the keyboard only, so a password field that is on screen but not being
+// typed in is missed, and so is one in an app that tells macOS nothing about its fields.
+pub(crate) fn password_field_focused() -> bool {
+    use core_foundation::base::{CFType, CFTypeRef, TCFType};
+    use core_foundation::string::{CFString, CFStringRef};
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        fn AXUIElementCreateSystemWide() -> CFTypeRef;
+        fn AXUIElementSetMessagingTimeout(element: CFTypeRef, seconds: f32) -> i32;
+        fn AXUIElementCopyAttributeValue(element: CFTypeRef, attribute: CFStringRef, value: *mut CFTypeRef) -> i32;
+    }
+    // the value of an attribute, or None on any error (0 is kAXErrorSuccess)
+    let copy = |element: &CFType, attribute: &'static str| -> Option<CFType> {
+        let mut value: CFTypeRef = std::ptr::null();
+        let name = CFString::from_static_string(attribute);
+        let error = unsafe { AXUIElementCopyAttributeValue(element.as_CFTypeRef(), name.as_concrete_TypeRef(), &mut value) };
+        (error == 0 && !value.is_null()).then(|| unsafe { CFType::wrap_under_create_rule(value) })
+    };
+    let system = unsafe { CFType::wrap_under_create_rule(AXUIElementCreateSystemWide()) };
+    // an app that has hung must not hold the monitor up for macOS's default of 6 s
+    unsafe { AXUIElementSetMessagingTimeout(system.as_CFTypeRef(), 1.0) };
+    copy(&system, "AXFocusedUIElement")
+        .and_then(|focused| copy(&focused, "AXSubrole"))
+        .and_then(|subrole| subrole.downcast::<CFString>())
+        .is_some_and(|subrole| subrole == "AXSecureTextField")
+}
+
 /// Adds one sample at `now` (epoch seconds): the open span grows, or a new one starts where it ended.
 pub(crate) fn record_app(conn: &Connection, app: &str, bundle_id: Option<&str>, now: i64) -> rusqlite::Result<()> {
     let last: Option<(i64, String, i64)> = conn
@@ -107,21 +139,58 @@ pub(crate) fn record_app(conn: &Connection, app: &str, bundle_id: Option<&str>, 
 // the laptop sleeps. Stop after some minutes without input (CGEventSourceSecondsSinceLastEventType)
 // once the drift ladder needs honest numbers; a lecture video has no input either, so pick the limit then.
 pub(crate) fn start(app: AppHandle) {
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_secs(SAMPLE_SECS));
-        if PAUSED.load(Ordering::Relaxed) {
-            continue;
-        }
-        let Some((name, bundle)) = front_app().map(gate) else { continue };
-        let db = app.state::<Db>();
-        let conn = lock(&db.0);
-        // the user's own Private apps, by the same key backend/modes.py uses
-        let saved = crate::modes::is_private(&conn, bundle.as_deref().unwrap_or(&name)).and_then(|private| {
-            let (name, bundle) = if private { ("Private", None) } else { (name.as_str(), bundle.as_deref()) };
-            record_app(&conn, name, bundle, chrono::Utc::now().timestamp())
-        });
-        if let Err(e) = saved {
-            eprintln!("app sample failed: {e}");
+    std::thread::spawn(move || {
+        let mut drift = Value::Null; // the drift state the windows last heard
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(SAMPLE_SECS));
+            let now = chrono::Utc::now().timestamp();
+            if paused(now) {
+                continue;
+            }
+            let Some((name, bundle)) = front_app().map(gate) else { continue };
+            // a private window in an ordinary app: a password is being typed, or Chrome's front window is
+            // one its extension calls private (incognito, or a page with a password field)
+            let chrome = bundle.as_deref() == Some(CHROME);
+            let window = password_field_focused() || (chrome && crate::browser::chrome_private(now));
+            let stored = {
+                let db = app.state::<Db>();
+                let conn = lock(&db.0);
+                // the user's own Private apps, by the same key backend/modes.py uses
+                crate::modes::is_private(&conn, bundle.as_deref().unwrap_or(&name)).and_then(|private| {
+                    let private = private || window;
+                    let (name, bundle) = if private { ("Private", None) } else { (name.as_str(), bundle.as_deref()) };
+                    record_app(&conn, name, bundle, now)?;
+                    // what the drift check needs: the same thing the gate let through, and the user's rules
+                    let page = if chrome && !private { crate::browser::front_page(now) } else { None }.unzip();
+                    let block = crate::db::setting(&conn, "block_drift")?.as_deref() == Some("1");
+                    Ok((block, json!({
+                        "app": name, "bundle_id": bundle, "domain": page.0, "url": page.1,
+                        "rules": crate::modes::rule_map(&conn)?, "declared": crate::modes::declared(&conn)?,
+                    })))
+                })
+            };
+            // the ladder is in backend/drift.py; the pet hears each change as a "drift" event, which
+            // also carries what its face shows: the mode of what is in front, and whether audio is on
+            let checked = stored.map_err(|e| e.to_string()).and_then(|(block, front)| {
+                let site = front["domain"].as_str().map(str::to_string);
+                let state = sidecar_call(&app.state::<Backend>(), "drift", Some(front))?;
+                // step 4, once as the ladder reaches it, and only if the user opted in: a site can be
+                // blocked, an app cannot
+                if let (true, Some(site)) = (block && state["step"] == 4 && drift["step"] != 4, site) {
+                    crate::browser::block(&site, BLOCK_MIN);
+                }
+                Ok::<_, String>(state)
+            });
+            match checked {
+                Ok(mut state) => {
+                    state["audio"] = json!(crate::browser::audio_on(now));
+                    if state != drift {
+                        let _ = app.emit("drift", &state);
+                        drift = state;
+                    }
+                }
+                Err(e) => eprintln!("app sample failed: {e}"),
+            }
         }
     });
 }

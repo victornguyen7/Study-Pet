@@ -120,6 +120,17 @@
         <p class="muted">Filled days reached your daily goal.</p>
       </section>
       <section>
+        <h2>Time by mode today</h2>
+        <ol id="balance" class="rows"></ol>
+        <h2>Stretches</h2>
+        <ol id="stretches" class="rows"></ol>
+        <p class="muted">
+          How the pet labeled today, from the apps and sites below. A stretch under 3 minutes takes the label it
+          interrupts; “unknown” is time in something the pet could not place. A wrong label? Answer the pet's
+          question in Today, or change the answer in Settings.
+        </p>
+      </section>
+      <section>
         <div id="sites-head" class="row">
           <h2>Sites today</h2>
           <button id="sites-refresh">Refresh</button>
@@ -183,6 +194,22 @@
         <p class="muted">Your answers about apps and sites. Forget one and the pet may ask again.</p>
       </section>
       <section>
+        <h2>Focus keeper</h2>
+        <label>The pet's voice when you drift
+          <select id="personality">
+            <option value="gentle">Gentle</option>
+            <option value="sassy">Sassy</option>
+            <option value="roast">Roast</option>
+          </select>
+        </label>
+        <p><label><input id="block" type="checkbox" /> After 10 minutes of drift in a focus block, block that site for 5 minutes</label></p>
+        <p class="muted">
+          During a focus block the pet glances at you after 30 seconds on something Relax, speaks after 2 minutes and
+          sits in the middle of the screen after 5. Blocking is off unless you tick it, works in Chrome only, and
+          covers the site's pages until the 5 minutes are over.
+        </p>
+      </section>
+      <section>
         <h2>Permissions</h2>
         <p>Accessibility: <span id="ax-status" role="status"></span></p>
         <p class="muted">
@@ -200,6 +227,10 @@
       <section>
         <h2>Pet</h2>
         <p>Press <kbd>Option</kbd> <kbd>Shift</kbd> <kbd>P</kbd> to hide or show the pet. Drag it to move it.</p>
+        <p>
+          Press <kbd>Option</kbd> <kbd>Shift</kbd> <kbd>L</kbd> and the pet looks away for 15 minutes: no app, page or
+          drift is noted. Press it again to end that early.
+        </p>
       </section>
     </main>
 

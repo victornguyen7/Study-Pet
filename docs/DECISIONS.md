@@ -437,3 +437,42 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Detail:** the answer is kept in `chrome.storage.local` under `site:<host>`, true or false, and covers every page on that host in every tab. The popup lists every answered site with a Yes/No switch and a Forget button; it writes to the storage directly, and the background script asks again about a site that was forgotten. Answering in one tab takes the question off other tabs on the same site. The extension no longer clears its storage when it is reloaded.
 - **Gave up:** a yes now covers pages not yet seen on that site, including ones with private text in the address. The answers are a second list beside the app's `app_rule`, which the data panel (PR-8) will have to cover; `www.example.com` and `example.com` are asked about separately. A site made Private in the app is still dropped by the app even if the extension was told yes.
 - **Revisit when:** the data panel, or when the two lists disagree in practice; moving the answers into `app_rule` over the native-messaging link is the spec's design.
+
+### A private window is found three ways, and each one errs toward Private
+- **Why:** built on 2026-10-07 for the spec's default Private list: "incognito windows, any screen with a password field". An app's name cannot show either, so the gate takes two more signals before a sample is stored.
+- **Detail:** in any app, the monitor asks macOS which field has the keyboard (`password_field_focused`, Accessibility); a secure text field makes that sample "Private". Without the permission the check is always "no".
+- **Detail:** the extension's content script reports whether the page shows a visible password field, which is the one thing it reads from a page. Every 5-second sample now carries `private`: true for such a page, for an incognito tab, and when no window the extension can see has the keyboard. The app keeps the last answer for 10 seconds and uses it only while Chrome is the app in front.
+- **Detail:** an extension not allowed in incognito cannot see those windows at all; it only sees that none of its own windows is focused. With Chrome in front, that is taken to mean incognito. Chrome in front with every window minimized, or with a separate DevTools window focused, is counted as Private too.
+- **Gave up:** a password field that is on screen but not being typed in is missed outside Chrome, and so is one inside a frame of a page. Private windows in Safari, Firefox and other browsers are not detected. Switching back to Chrome can cost one 5-second sample labeled the wrong way.
+- **Revisit when:** window titles are read, or the extension is built for another browser.
+
+### The focus keeper is on during a focus block only, and drift is what is Relax
+- **Why:** built on 2026-10-07. The spec turns the keeper on for all Study and Work time. A focus block is the one moment the user has said "I mean to focus", so nudging only then cannot be wrong about the mode; declaring "relaxing" turns it off even then.
+- **Detail:** with each 5-second sample the monitor sends what the gate let through (the app, and the allowed page in front in Chrome) to `drift` in the sidecar, which knows whether a block is running. Drift is a Relax category or a Relax answer from the user, plus YouTube's home page, feeds and Shorts whatever was said about YouTube. Unknown and Private things are never drift.
+- **Detail:** `Drift` in `backend/drift.py` counts one unbroken stretch: step 1 at 30 s, 2 at 2 min, 3 at 5 min. The pet's lines give the time, what it went to and the task, nothing about the user.
+- **Gave up:** step 4 (blocking) and the three personalities. At step 3 the pet sits in the middle of the screen, not on the distracting window. One sample that is not drift resets the ladder, so a 5-second look at the notes starts it again. A site the extension was told "no" about is invisible, so it is never drift. Time away from the keyboard on a Relax page counts as drift.
+- **Revisit when:** the gate's test day shows how often study happens outside a focus block, and when the app can send messages to the extension (step 4).
+
+### A music app has no mode, and one minute in front before it is drift
+- **Why:** built on 2026-10-07 for the spec's background-audio rules. The label was already judged by what is in front, so music playing behind it changed nothing. What was missing was the music app itself coming to the front.
+- **Detail:** `MUSIC` in `backend/modes.py` lists Spotify, Apple Music, SoundCloud and YouTube Music by bundle ID or site. `classify` gives them no mode (source "music"), so smoothing folds the time into the label around it, however long, and they are left off the list of questions. An answer from the user still wins: Spotify marked Relax is plain drift with no grace.
+- **Detail:** `Drift.update` takes `music`: the first 60 seconds in front are free (skipping a song), then it is drift and the ladder's own 30 seconds, 2 and 5 minutes count from there.
+- **Gave up:** nothing knows whether audio is actually playing, so there is no "audio on" log (PR-11) and no cue for headphones yet. A YouTube video in front is still unknown, music or not. "Recommendations and comments" are not told apart from the rest of a page; Shorts and feeds were already drift.
+- **Revisit when:** the Headphones state, where the extension can report a tab that is playing; native apps would need another way.
+
+### The pet's face follows one sample, and its states are CSS classes
+- **Why:** built on 2026-10-07. The states need to change within seconds, so they follow the mode of the single thing in front now, which the sidecar's `drift` call already works out, not the smoothed labels of the day.
+- **Detail:** `main.ts` sets `relaxing`, `headphones`, `nudging` and `happy` on the pet each second; `pet.css` draws them with `scale`, `rotate` and `translate` so they add up. Headphones are a second picture on the slime's 24 x 16 grid. With reduced motion on, the pet still lies down and wears headphones but does not rock, hop or bob.
+- **Detail:** audio comes from Chrome's own "this tab is playing" flag, sent as one true or false. The app keeps it for 10 seconds, in memory only.
+- **Gave up:** music from Spotify or Apple Music outside Chrome puts no headphones on. There is no "audio on" log, since nothing would read it yet. The face can be up to 5 seconds behind, and it keeps its last state while the pet's own panel is in front or a break runs. Work has no look of its own, and Sleeping is not built.
+- **Revisit when:** the wrap-up wants to show listening time (then log it), or a native way to ask macOS what is playing is added.
+
+### Phase 3 was finished in one pass, with the smallest version of each remaining piece
+- **Why:** asked for on 2026-10-07, to be tested by hand afterwards. Each piece below is the least that meets its line in the spec; the limits are items 65 to 78 in `KNOWN_ISSUES.md`.
+- **Detail, time balance:** the Wrap up view calls `modes_today` and shows the totals and the stretches. Each stretch now carries `what`, the names of the apps and sites in it, so a label can be judged for the gate. Nothing is stored: only today can be shown.
+- **Detail, step 4:** the app keeps its end of the extension's socket and writes one message, `{block, minutes}`, when the ladder reaches step 4 with the setting on. The extension keeps the end time in session storage and its content script covers the page. A site only, since an app cannot be covered.
+- **Detail, voices:** three sets of lines in `src/pet/main.ts`, chosen by the `personality` setting. All of them speak about the time, the site or the task.
+- **Detail, look-away:** an end time in memory, checked wherever a break is checked, so apps, pages and drift all stop. The focus block's timer keeps running.
+- **Detail, S-7:** the offer is the last smoothed stretch being Study, 5 minutes long and under a minute old, with the timer idle.
+- **Gave up:** the window title (C-1) is still not read; nothing uses it, and it is the most private thing the monitor could store. Edge, YouTube's player state, "suggest relaxing after 4 hours" and the optional relax limit are not built.
+- **Revisit when:** the hand test and the gate's test day are done; they decide which of these limits matter.

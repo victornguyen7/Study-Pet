@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
@@ -21,6 +21,66 @@ use crate::db::{lock, Db};
 pub(crate) const GAP_SECS: i64 = 15;
 /// C-4: set by the timer thread during a break; samples are dropped while it is set.
 pub(crate) static PAUSED: AtomicBool = AtomicBool::new(false);
+
+/// PR-1: when the extension last said that what is in front in Chrome is private (epoch seconds), or 0.
+/// It says so for an incognito window, a page showing a password field, and whenever no window it can
+/// see has the keyboard, which is also true while Chrome is behind another app.
+static PRIVATE_AT: AtomicI64 = AtomicI64::new(0);
+
+/// The allowed page in front in Chrome, as (when it was sent, site, address). The drift check reads it.
+static FRONT_PAGE: std::sync::Mutex<Option<(i64, String, String)>> = std::sync::Mutex::new(None);
+
+/// The site and address of the page in front in Chrome, if the extension named one in the last two samples.
+pub(crate) fn front_page(now: i64) -> Option<(String, String)> {
+    lock(&FRONT_PAGE).clone().filter(|(at, ..)| now - at <= 10).map(|(_, domain, url)| (domain, url))
+}
+
+/// PR-3: until when (epoch seconds) the pet looks away. Nothing is noted before then.
+static AWAY_UNTIL: AtomicI64 = AtomicI64::new(0);
+const AWAY_SECS: i64 = 15 * 60;
+
+/// C-4: nothing is noted during a break, or while the pet has been told to look away.
+pub(crate) fn paused(now: i64) -> bool {
+    PAUSED.load(Ordering::Relaxed) || now < AWAY_UNTIL.load(Ordering::Relaxed)
+}
+
+/// The look-away shortcut: 15 minutes from `now`, or back to watching if it was already looking away.
+/// Returns until when, 0 when watching again.
+pub(crate) fn look_away(now: i64) -> i64 {
+    let until = if now < AWAY_UNTIL.load(Ordering::Relaxed) { 0 } else { now + AWAY_SECS };
+    AWAY_UNTIL.store(until, Ordering::Relaxed);
+    until
+}
+
+/// The app's end of the link to the extension, for the one thing the app says after hello.
+static EXTENSION: std::sync::Mutex<Option<UnixStream>> = std::sync::Mutex::new(None);
+
+/// Ladder step 4: asks the extension to cover every page on `site` for `minutes`.
+// ponytail: one link is kept, so with two Chrome profiles connected only the last one hears it.
+pub(crate) fn block(site: &str, minutes: i64) {
+    let frame = json!({ "block": site, "minutes": minutes }).to_string();
+    if let Some(stream) = lock(&EXTENSION).as_mut() {
+        let _ = stream.write_all(&(frame.len() as u32).to_ne_bytes()).and_then(|_| stream.write_all(frame.as_bytes()));
+    }
+}
+
+/// PR-11: when the extension last said a tab in Chrome is playing sound, or 0. Never which tab.
+static AUDIO_AT: AtomicI64 = AtomicI64::new(0);
+
+/// Whether audio is on in Chrome, by the extension's last two samples.
+pub(crate) fn audio_on(now: i64) -> bool {
+    now - AUDIO_AT.load(Ordering::Relaxed) <= 10
+}
+
+pub(crate) fn note_private(private: bool, now: i64) {
+    PRIVATE_AT.store(if private { now } else { 0 }, Ordering::Relaxed);
+}
+
+/// Whether Chrome, when it is the app in front, is showing something private. An answer older than
+/// two samples is not trusted: the extension may be gone.
+pub(crate) fn chrome_private(now: i64) -> bool {
+    now - PRIVATE_AT.load(Ordering::Relaxed) <= 10
+}
 
 /// Fixed by the `key` in extension/manifest.json.
 const EXTENSION_ID: &str = "jenjlnnminflmafgghiodlmpokbkeble";
@@ -102,12 +162,21 @@ fn serve(app: &AppHandle, mut stream: UnixStream) {
     if stream.write_all(&(hello.len() as u32).to_ne_bytes()).and_then(|_| stream.write_all(hello)).is_err() {
         return;
     }
+    *lock(&EXTENSION) = stream.try_clone().ok();
     read_frames(stream, |message| {
-        if PAUSED.load(Ordering::Relaxed) {
+        let now = chrono::Utc::now().timestamp();
+        let private = message["private"] == true;
+        note_private(private, now);
+        AUDIO_AT.store(if message["audio"] == true { now } else { 0 }, Ordering::Relaxed);
+        *lock(&FRONT_PAGE) = None; // until this sample names a page that may be kept
+        if private || paused(now) {
             return;
         }
         let (Some(url), Some(title)) = (message["url"].as_str(), message["title"].as_str()) else { return };
-        let saved = record_page(&lock(&app.state::<Db>().0), url, title, chrono::Utc::now().timestamp());
+        let saved = record_page(&lock(&app.state::<Db>().0), url, title, now);
+        if let (Ok(true), Some((domain, url))) = (&saved, clean(url)) {
+            *lock(&FRONT_PAGE) = Some((now, domain, url));
+        }
         if let Err(e) = saved {
             eprintln!("page sample failed: {e}");
         }

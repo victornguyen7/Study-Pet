@@ -1,4 +1,5 @@
-// Asks, once per site, whether the pet may note the time spent here. It reads nothing from the page.
+// Asks, once per site, whether the pet may note the time spent here. The one thing it looks at on
+// the page is whether a password field is showing, so that such a page is never noted.
 // It can arrive twice (at load, and put in by background.js), so the second copy does nothing.
 if (!globalThis.studyPetAsks) {
   globalThis.studyPetAsks = true;
@@ -46,14 +47,42 @@ if (!globalThis.studyPetAsks) {
     document.documentElement.append(asked);
   }
 
+  // Drift ladder, step 4 (opt-in in the app): the page is covered until the block ends.
+  let cover;
+  function block(until) {
+    cover?.remove();
+    if (!(until > Date.now())) return;
+    const covered = (cover = document.createElement("div"));
+    const root = covered.attachShadow({ mode: "closed" });
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(`
+      div { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-content: center; text-align: center;
+            background: #1f2933; color: #fff; font: 20px/1.5 system-ui, sans-serif; }
+      small { display: block; opacity: 0.75; font-size: 14px; }`);
+    root.adoptedStyleSheets = [sheet];
+    const time = new Date(until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const message = el("div", `Study Pet is holding ${location.hostname} until ${time}.`);
+    message.setAttribute("role", "alertdialog");
+    message.append(el("small", "You asked for this in Study Pet's settings. Your focus block is waiting."));
+    root.append(message);
+    document.documentElement.append(covered);
+    setTimeout(() => covered.remove(), until - Date.now());
+  }
+
   if (window === window.top) {
     chrome.runtime.sendMessage({ type: "check" }, (answer) => {
-      if (!chrome.runtime.lastError && answer?.ask) ask();
+      if (chrome.runtime.lastError) return;
+      if (answer?.ask) ask();
+      block(answer?.blockedUntil);
     });
     // the page changed its address without loading again, or its tab came to the front
-    chrome.runtime.onMessage.addListener((message) => {
+    chrome.runtime.onMessage.addListener((message, _sender, reply) => {
       if (message.type === "ask") ask();
       if (message.type === "answered") box?.remove(); // answered in another tab on this site
+      if (message.type === "block") block(message.until);
+      // PR-1: a page is private while it shows a password field; only this yes or no leaves the page
+      if (message.type === "password?")
+        reply([...document.querySelectorAll("input[type=password]")].some((input) => input.checkVisibility()));
     });
   }
 }

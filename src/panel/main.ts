@@ -502,6 +502,18 @@ async function loadAsks() {
 }
 run(async () => showLearned(await invoke<Rule[]>("learned")));
 
+// the focus keeper's settings (keeper in src-tauri/src/modes.rs)
+type Keeper = { personality: string; block: boolean };
+const personality = $<HTMLSelectElement>("personality");
+const blockDrift = $<HTMLInputElement>("block");
+const showKeeper = (k: Keeper) => {
+  personality.value = k.personality;
+  blockDrift.checked = k.block;
+};
+personality.onchange = () => run(async () => showKeeper(await invoke<Keeper>("keeper", { personality: personality.value })));
+blockDrift.onchange = () => run(async () => showKeeper(await invoke<Keeper>("keeper", { block: blockDrift.checked })));
+run(async () => showKeeper(await invoke<Keeper>("keeper")));
+
 // PR-10: macOS is only ever made to ask from this button, which sits under the explanation
 async function loadAccessibility(ask = false) {
   const allowed = await invoke<boolean>("accessibility", { ask });
@@ -530,7 +542,35 @@ function timeRows(list: string, rows: [string, number][]) {
 }
 
 // Mirrors site_time_today() in src-tauri/src/browser.rs and app_time_today() in monitor.rs
+// Mirrors label_day() in backend/modes.py
+type ModeDay = {
+  spans: { start: number; end: number; mode: string | null; source: string | null; what: string[] }[];
+  totals: Record<string, number>;
+};
+const hhmm = (secs: number) => new Date(secs * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const modeName = (mode: string | null) => (mode ? mode[0].toUpperCase() + mode.slice(1) : "Unknown");
+async function loadBalance() {
+  const day = await invoke<ModeDay>("modes_today");
+  const order = ["study", "work", "relax", "private", "unknown"];
+  timeRows("balance", order.filter((m) => day.totals[m]).map((m) => [modeName(m), day.totals[m]]));
+  // newest first; a stretch of a single 5 s sample says nothing
+  const spans = day.spans.filter((s) => s.end - s.start >= 60).reverse();
+  $("stretches").replaceChildren(
+    ...spans.map((s) => {
+      const li = el("li");
+      const what = s.what.slice(0, 3).join(", ") + (s.what.length > 3 ? ` and ${s.what.length - 3} more` : "");
+      li.append(
+        el("span", `${hhmm(s.start)} to ${hhmm(s.end)} · ${modeName(s.mode)} · ${what}`),
+        el("span", duration((s.end - s.start) / 60)),
+      );
+      return li;
+    }),
+  );
+  if (!spans.length) $("stretches").append(el("li", "Nothing of a minute or more yet today.", "empty"));
+}
+
 async function loadSites() {
+  await loadBalance();
   const sites = await invoke<{ domain: string; seconds: number }[]>("site_time");
   timeRows("sites", sites.map((s) => [s.domain, s.seconds]));
   const apps = await invoke<{ app: string; seconds: number }[]>("app_time");
