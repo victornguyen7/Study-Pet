@@ -460,9 +460,11 @@ run(async () => {
 // the user's own word on the mode, which beats every rule in backend/modes.py
 const mode = $<HTMLSelectElement>("mode");
 mode.onchange = () => run(() => invoke("declared_mode", { set: mode.value }));
-run(async () => {
+// it ends by itself at midnight, and "relax" ends when a focus block starts
+const loadMode = async () => {
   mode.value = (await invoke<string | null>("declared_mode")) ?? "";
-});
+};
+run(loadMode);
 
 // PR-2: apps and sites the pet could not place (label_day in backend/modes.py), and the answers it keeps
 type Rule = { key: string; name: string; mode: string };
@@ -661,7 +663,10 @@ run(() =>
     // a block just ended or began: the time spent on its task has changed
     const changed = s.phase !== lastTimer.phase;
     lastTimer = s;
-    if (changed) run(loadTasks);
+    if (changed) {
+      run(loadTasks);
+      run(loadMode);
+    }
     else showFinished();
     $("clock").textContent = s.phase === "callback" ? "" : mmss(s.remaining);
     $("resume").hidden = s.phase !== "callback";
@@ -686,6 +691,7 @@ run(() =>
     if (day !== shownDay) {
       shownDay = day;
       run(loadImports);
+      run(loadMode);
     }
   }),
 );

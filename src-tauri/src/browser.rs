@@ -44,6 +44,32 @@ pub(crate) fn paused(now: i64) -> bool {
     PAUSED.load(Ordering::Relaxed) || now < AWAY_UNTIL.load(Ordering::Relaxed)
 }
 
+/// With no key, click or pointer move for this long, nobody is taken to be at the laptop.
+// ponytail: one fixed limit. Something watched without input outside Chrome (a lecture in Zoom, a film
+// in the TV app) stops counting after it; ask macOS who is holding the display awake if that hurts.
+const IDLE_SECS: f64 = 5.0 * 60.0;
+
+/// Seconds since the last key, click or pointer move.
+pub(crate) fn idle_secs() -> f64 {
+    #[cfg(target_os = "macos")]
+    {
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGEventSourceSecondsSinceLastEventType(state: i32, event: u32) -> f64;
+        }
+        // kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType
+        unsafe { CGEventSourceSecondsSinceLastEventType(0, u32::MAX) }
+    }
+    #[cfg(not(target_os = "macos"))]
+    0.0
+}
+
+/// Whether a sample should be dropped because nobody is there: `idle` seconds without input, unless
+/// Chrome is in front playing sound (`watching`), since a lecture video has no input either.
+pub(crate) fn nobody_there(idle: f64, watching: bool) -> bool {
+    idle >= IDLE_SECS && !watching
+}
+
 /// The look-away shortcut: 15 minutes from `now`, or back to watching if it was already looking away.
 /// Returns until when, 0 when watching again.
 pub(crate) fn look_away(now: i64) -> i64 {
@@ -169,7 +195,8 @@ fn serve(app: &AppHandle, mut stream: UnixStream) {
         note_private(private, now);
         AUDIO_AT.store(if message["audio"] == true { now } else { 0 }, Ordering::Relaxed);
         *lock(&FRONT_PAGE) = None; // until this sample names a page that may be kept
-        if private || paused(now) {
+        // a page is only sent while Chrome has the keyboard, so sound here is sound in the app in front
+        if private || paused(now) || nobody_there(idle_secs(), audio_on(now)) {
             return;
         }
         let (Some(url), Some(title)) = (message["url"].as_str(), message["title"].as_str()) else { return };

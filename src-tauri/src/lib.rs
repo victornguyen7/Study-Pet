@@ -132,7 +132,6 @@ pub fn run() {
             #[cfg(desktop)]
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
-                    .with_shortcuts(["alt+shift+p", "alt+shift+l"])?
                     .with_handler(|app, shortcut, event| {
                         if event.state != tauri_plugin_global_shortcut::ShortcutState::Pressed {
                             return;
@@ -153,6 +152,15 @@ pub fn run() {
                     })
                     .build(),
             )?;
+            // another program, or a second copy of this app, may hold either key already: the pet
+            // starts without that one
+            #[cfg(desktop)]
+            for keys in ["alt+shift+p", "alt+shift+l"] {
+                use tauri_plugin_global_shortcut::GlobalShortcutExt;
+                if let Err(e) = app.global_shortcut().register(keys) {
+                    eprintln!("shortcut {keys} not available: {e}");
+                }
+            }
 
             #[cfg(target_os = "macos")]
             if let Some(panel) = app.get_webview_window("panel") {
@@ -290,6 +298,11 @@ mod tests {
         assert_eq!(browser::look_away(t + 10), 0);
         assert!(!browser::paused(t + 11));
 
+        // nobody at the keyboard for 5 minutes ends the noting, unless Chrome is in front playing sound
+        assert!(!browser::nobody_there(299.0, false) && browser::nobody_there(300.0, false));
+        assert!(!browser::nobody_there(3600.0, true));
+        assert!(browser::idle_secs() >= 0.0);
+
         // frames as Chrome sends them; an oversized length ends the reading
         let frame = |body: &str| [&(body.len() as u32).to_ne_bytes()[..], body.as_bytes()].concat();
         let bytes = [frame(r#"{"url":"u"}"#), frame("{}"), u32::MAX.to_ne_bytes().to_vec(), frame("{}")].concat();
@@ -373,6 +386,19 @@ mod tests {
         }
         declare(&conn, None).unwrap();
         assert_eq!(declared(&conn).unwrap(), None);
+
+        // one left on yesterday ended at the midnight after it was made, and labels nothing today
+        conn.execute("INSERT INTO mode_declaration (started_at, mode) VALUES (?1, 'relax')", [at(now - 86400)]).unwrap();
+        assert_eq!(declared(&conn).unwrap(), None);
+        let ended_next_day: bool = conn
+            .query_row(
+                "SELECT date(ended_at, 'localtime') = date(started_at, 'localtime', '+1 day') AND time(ended_at, 'localtime') = '00:00:00'
+                 FROM mode_declaration ORDER BY id DESC LIMIT 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(ended_next_day);
 
         // S-7: an offer needs 5 minutes of Study that is still going
         let day = |mode: &str, start: i64, end: i64| json!({ "spans": [{ "mode": "relax", "start": 0, "end": 10 }, { "mode": mode, "start": start, "end": end }] });

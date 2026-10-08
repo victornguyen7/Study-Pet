@@ -7,10 +7,20 @@ use crate::sidecar::{sidecar_call, Backend};
 
 // ---- Modes: the rules are in backend/modes.py; today's spans and the user's declarations come from here ----
 
+/// A declaration ends at the local midnight after it was made, so "Relax" left on in the evening does
+/// not label the next morning. Every reader calls this first, since the app may have been shut overnight.
+fn expire(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE mode_declaration SET ended_at = strftime('%Y-%m-%dT%H:%M:%SZ', date(started_at, 'localtime', '+1 day'), 'utc')
+         WHERE ended_at IS NULL AND date(started_at, 'localtime') < date('now', 'localtime')",
+        [],
+    )?;
+    Ok(())
+}
+
 /// Ends the declaration in force, and starts a new one unless `mode` is None ("decide for me").
-// ponytail: a declaration lasts until it is changed, even overnight. End it at a new focus block or
-// at midnight if "Relax" gets left on.
 pub(crate) fn declare(conn: &Connection, mode: Option<&str>) -> rusqlite::Result<()> {
+    expire(conn)?;
     // the new one first: a mode the table refuses must leave the old declaration in force
     let new = match mode {
         Some(mode) => {
@@ -27,6 +37,7 @@ pub(crate) fn declare(conn: &Connection, mode: Option<&str>) -> rusqlite::Result
 }
 
 pub(crate) fn declared(conn: &Connection) -> rusqlite::Result<Option<String>> {
+    expire(conn)?;
     conn.query_row("SELECT mode FROM mode_declaration WHERE ended_at IS NULL", [], |r| r.get(0)).optional()
 }
 
@@ -41,6 +52,7 @@ pub(crate) fn mode_input(conn: &Connection) -> rusqlite::Result<Value> {
         )?;
         Ok(serde_json::from_str(&text).unwrap_or_default())
     };
+    expire(conn)?;
     let span = "'start', unixepoch(started_at), 'end', unixepoch(ended_at)";
     let today = "date(started_at, 'localtime') = date('now', 'localtime')";
     Ok(json!({

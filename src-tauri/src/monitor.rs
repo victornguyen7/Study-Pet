@@ -3,7 +3,7 @@ use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::browser::{paused, GAP_SECS};
+use crate::browser::{idle_secs, nobody_there, paused, GAP_SECS};
 use crate::db::{lock, Db};
 use crate::sidecar::{sidecar_call, Backend};
 
@@ -134,10 +134,7 @@ pub(crate) fn record_app(conn: &Connection, app: &str, bundle_id: Option<&str>, 
     Ok(())
 }
 
-/// Samples the front app every 5 s, except during a break (C-4).
-// ponytail: an app left in front with nobody at the keyboard keeps counting until the screen locks or
-// the laptop sleeps. Stop after some minutes without input (CGEventSourceSecondsSinceLastEventType)
-// once the drift ladder needs honest numbers; a lecture video has no input either, so pick the limit then.
+/// Samples the front app every 5 s, except during a break (C-4) and with nobody at the keyboard.
 pub(crate) fn start(app: AppHandle) {
     std::thread::spawn(move || {
         let mut drift = Value::Null; // the drift state the windows last heard
@@ -148,9 +145,12 @@ pub(crate) fn start(app: AppHandle) {
                 continue;
             }
             let Some((name, bundle)) = front_app().map(gate) else { continue };
+            let chrome = bundle.as_deref() == Some(CHROME);
+            if nobody_there(idle_secs(), chrome && crate::browser::audio_on(now)) {
+                continue;
+            }
             // a private window in an ordinary app: a password is being typed, or Chrome's front window is
             // one its extension calls private (incognito, or a page with a password field)
-            let chrome = bundle.as_deref() == Some(CHROME);
             let window = password_field_focused() || (chrome && crate::browser::chrome_private(now));
             let stored = {
                 let db = app.state::<Db>();

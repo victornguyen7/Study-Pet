@@ -18,12 +18,11 @@ Reviewed 2026-10-07. Item numbers refer to the lists below.
 - Items 40, 42, 43 and 46: the drift ladder needs a bubble that can be clicked; fix these with it.
 - Items 3 and 52 were fixed on 2026-10-07. Restart the dev app and run a focus block once to confirm.
 - Item 53 was fixed on 2026-10-07. Reload the extension on `chrome://extensions` so it runs 0.2.1.
-- Item 56: idle time counts, and the drift ladder needs honest numbers.
+- Items 56, 57 and 71 were fixed on 2026-10-08 (idle time, a declaration left on overnight, a refused shortcut). Add them to the hand test: leave the laptop for 6 minutes and check "Apps today" stops growing.
 - Item 60: reload the extension and try the once-per-site question.
 - Item 65 first: the hand test of everything built on 2026-10-07. It includes what items 60, 63 and 64 asked for.
 - Item 66: the Phase 3 gate can only be judged on the same day, in the Wrap up view.
-- Items 56, 61 and 67: idle time, the short category list and the focus-block-only keeper are the three most likely to make the test day's labels or nudges wrong.
-- Item 71: both global shortcuts are fixed keys, and the dev app and the everyday app ask for the same ones.
+- Items 61 and 67: the short category list and the focus-block-only keeper are the two most likely to make the test day's labels or nudges wrong.
 - The fixed hide shortcut (see "Older items") matters once the look-away shortcut is added. No content security policy can wait: nothing in `src/` or `extension/` builds HTML from text.
 
 **Before Phase 4 (capture)**
@@ -159,10 +158,9 @@ Reviewed 2026-10-07. Item numbers refer to the lists below.
 54. **Any program running as the user can add made-up pages.** The socket is open to the user's own programs only, but nothing checks that a message came from the extension. The same reach exists into the Keychain (item 1).
 55. **A page's full address and title are stored in plain text.** The query string is kept because it tells pages apart, so a search or a share token in an address is stored too, in a database that is not encrypted. A yes for a site covers pages not yet seen on it.
     *Cost if left:* the same exposure as item 2, growing every day the extension is on. A Private answer in the app deletes that site's pages.
-56. **Time with nobody at the keyboard counts.** An app left in front keeps adding to its span until the screen locks or the laptop sleeps. "Apps today" and the mode totals are too high by that much.
-    *Fix:* stop after some minutes without input; a lecture video has no input either, so the limit has to be chosen with the drift ladder.
-57. **A declared mode lasts until it is changed, even overnight.** "Relax" left on in the evening labels the next morning Relax, and declared time is never relabeled.
-    *Fix:* end it at a new focus block or at midnight.
+56. **Fixed 2026-10-08: time with nobody at the keyboard counted.** After 5 minutes with no key, click or pointer move, the front app and Chrome's pages are no longer noted (`nobody_there` in `browser.rs`), unless Chrome is in front playing sound, since a lecture video has no input either. Not yet seen in the running app.
+    *What is left:* the 5 minutes before the limit are still counted. Something watched without input outside Chrome (a lecture in Zoom, a film in the TV app) stops counting after 5 minutes, and with it the drift ladder for that app. The limit is one fixed number, `IDLE_SECS`.
+57. **Fixed 2026-10-08: a declared mode lasted until it was changed, even overnight.** A declaration now ends at the local midnight after it was made, and "Relax" also ends when a focus block is started. "Study" and "Work" stay on through a focus block. Declared time is still never relabeled. Not yet seen in the running app.
 58. **A rule covers one exact site.** An answer for `example.com` does not cover `www.example.com`, in the app or in the extension, so each is asked about separately; making one Private leaves the other recorded. The extension's yes and no list and the app's `app_rule` are also two lists that can disagree: a site made Private in the app is dropped by the app whatever the extension was told, but a no in the extension is not known to the app.
 59. **The gate knows apps and sites, not windows.** An app that is not on the built-in list is named in `app_span` before the user has been asked about it. Private windows inside ordinary apps are covered by item 63. Forgetting a Private rule does not bring the old names back.
 60. **The once-per-site question was syntax-checked only when it was built.** It has since been used in Chrome (`ROADMAP.md`, Phase 3). The labels from the classifier are now shown in the Wrap up view (item 66).
@@ -204,8 +202,8 @@ Everything here was built in one day and checked by tests, a type check and a bu
     *Also:* once started it runs its 5 minutes even if the user goes back to the task, the focus block ends or the box in Settings is unticked. Closing Chrome ends it. It starts once, as the ladder reaches 10 minutes; a ladder that was reset by one glance elsewhere never gets there.
 69. **The voices are three fixed sets of lines.** They cover the ladder's bubble, the sitting line and the welcome back. Break lines, reminders, questions and the offer sound the same in every voice. Sassy and Roast were written to speak only of time, the site and the task, and have been read by nobody but their author.
 70. **Looking away is easy to miss and easy to lose.** The only signs are a bubble for 6 seconds and shut eyes, which is also how the pet looks when no block is running; the panel says nothing. The 15 minutes are kept in memory, so quitting the app ends them. The focus block's timer keeps counting, and that time still goes to the streak. The extension keeps sending and keeps asking about new sites; the app drops what arrives.
-71. **Two fixed global shortcuts.** Option-Shift-P and Option-Shift-L cannot be changed. If another program, or a second copy of this app (the dev build beside the everyday one), already holds either, the app may fail at launch or the keys may do nothing; this was not tried.
-    *Fix:* a field in Settings, and a launch that survives a refused shortcut.
+71. **Two fixed global shortcuts.** Option-Shift-P and Option-Shift-L cannot be changed. Fixed 2026-10-08: a shortcut that macOS refuses no longer stops the launch; the app starts without it and logs "shortcut ... not available". Not tried with the dev build beside the everyday one, so which copy the keys reach is unknown.
+    *Fix when it annoys:* a field in Settings.
 72. **The offer to start a session leans on the category list.** It needs 5 minutes labeled Study, which without a session means a site or app on the built-in list or one the user has answered for. It comes at most once in half an hour, counted in memory, so a restart can repeat it. It uses the same bubble as reminders and questions, so a reminder that is due wins, and the bubble only points to the panel.
 73. **The window title is not read (C-1), though its task is ticked in the roadmap.** The Accessibility permission is used for one thing: whether the keyboard is in a password field. The Permissions text in Settings still says titles will be read. Nothing would use a title today, and it is the most private thing the monitor could store.
     *Cost if left:* two documents in one app cannot be told apart, so Preview is Study or Relax as a whole.

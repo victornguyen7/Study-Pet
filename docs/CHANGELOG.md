@@ -26,6 +26,9 @@
 - The everyday app in `/Applications` was rebuilt and reinstalled on 2026-10-07 with everything here; its database gained the four new tables.
 
 **Fixed**
+- Time with nobody at the keyboard is no longer counted: after 5 minutes without input the front app and Chrome's pages are not noted, unless Chrome is in front playing sound.
+- A declared mode ends at midnight, and "Relax" ends when a focus block starts. It used to last until changed, so "Relax" left on in the evening labeled the next morning.
+- A global shortcut that another program holds no longer stops the app from starting.
 - An error from the Python sidecar no longer throws away the running focus block. Any error, such as quick add's "a task needs a title", used to replace the process, and the timer lives in it. The process is now replaced only when the pipe or the reply is broken.
 - A crash while reading one feed no longer fails every feed. It is that source's own error and shows only the kind of error ("the task fetcher failed: KeyError"), never Python's own message.
 - A panic while a lock is held no longer makes every later call panic. The database and sync locks go through `lock` in `db.rs`; the sidecar's lock starts a fresh Python process.

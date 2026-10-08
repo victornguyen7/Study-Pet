@@ -27,6 +27,14 @@ pub(crate) fn timer_action(app: &AppHandle, params: Value) -> Result<Value, Stri
 /// `params` is `{ action: "start_focus" | "skip_break" | "resume" | "stop" | "tick", ...args }`.
 #[tauri::command(async)]
 pub(crate) fn timer(app: AppHandle, params: Value) -> Result<Value, String> {
+    // starting a focus block takes back "I'm relaxing", which would otherwise keep the keeper off
+    if params["action"] == "start_focus" {
+        let db = app.state::<Db>();
+        let conn = lock(&db.0);
+        if crate::modes::declared(&conn).map_err(|e| e.to_string())?.as_deref() == Some("relax") {
+            crate::modes::declare(&conn, None).map_err(|e| e.to_string())?;
+        }
+    }
     timer_action(&app, params)
 }
 
