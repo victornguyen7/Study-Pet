@@ -8,6 +8,8 @@
 - Private windows in ordinary apps (PR-1): time is recorded as "Private" while a password field has the keyboard in any app, while a Chrome incognito window is in front, and while the page in front shows a password field. The extension (0.3.0) now tells the app with every sample whether Chrome's front window is private, and never sends such a page.
 
 **Added**
+- Sound from any app, not only Chrome, puts the pet's headphones on, and the time with sound on is logged in the new table `audio_span` (start and end only, PR-11) and shown in Wrap up. New command `audio_time`.
+- Settings counts down to the next Google sign-in ("Sign in again in 3 days"): the sign-in ends after 7 days while the Cloud project is in "Testing". The time of the sign-in is kept in `feed_account_google`; a sign-in made before this has no time and shows no countdown.
 - Time balance in the Wrap up view: seconds per mode today, and each labeled stretch of a minute or more with its times, label and the apps and sites in it.
 - Drift ladder step 4, off by default: after 10 minutes of drift on a site the app asks the extension (0.5.0) to cover its pages for 5 minutes. "Focus keeper" in Settings holds the switch and the pet's voice: Gentle, Sassy or Roast. New command `keeper`.
 - Look-away shortcut (PR-3): Option-Shift-L pauses all noting for 15 minutes; pressing it again ends that.

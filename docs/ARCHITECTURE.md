@@ -69,6 +69,7 @@ flowchart LR
 | `task_source_link` | Which imported item a task came from; `(source, source_uid)` is unique so a re-import cannot duplicate; `removed_at` marks one that left its feed | Yes |
 | `calendar_event` | Imported calendar events from yesterday to 30 days ahead, replaced on every sync | Yes |
 | `activity_span` | Pages from the Chrome extension: site, address, title, start and end | Yes |
+| `audio_span` | That sound was on, from any app: start and end only, never what was playing (PR-11) | Yes |
 | `app_span` | The app in front, from the window monitor: name, bundle ID, start and end. No window title | Yes |
 | `app_rule` | What the user said an app or site is for (Study, Work, Relax or Private), and which ones the pet has already asked about | Yes |
 | `mode_declaration` | The mode the user said they were in ("Right now I'm relaxing"), with its start and end | Yes |

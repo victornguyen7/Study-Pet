@@ -202,6 +202,8 @@ pub(crate) fn feed_list(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
                 "set": has("feed_url_")? || has("feed_file_")? || has("feed_account_")?,
                 "file": has("feed_file_")?,
                 "account": has("feed_account_")?,
+                // when the sign-in was made; one from before this was kept is "1", with no time
+                "signed_in_at": setting(conn, &format!("feed_account_{source}"))?.filter(|at| at != "1"),
                 "status": status.and_then(|s| serde_json::from_str::<Value>(&s).ok()),
             }))
         })
@@ -404,7 +406,9 @@ pub(crate) fn connect_google(app: AppHandle) -> Result<(), String> {
         let _one_at_a_time = lock(&syncing.0);
         let db = app.state::<Db>();
         let conn = lock(&db.0);
-        replace_feed(&conn, "google", "feed_account_", "1").map_err(|e| e.to_string())?;
+        // the time, so Settings can count down to the next sign-in
+        let at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        replace_feed(&conn, "google", "feed_account_", &at).map_err(|e| e.to_string())?;
     }
     sync_feeds(&app)
 }

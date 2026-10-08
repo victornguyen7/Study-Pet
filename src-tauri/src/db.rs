@@ -85,6 +85,11 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             app TEXT NOT NULL,        -- the name the Dock shows
             bundle_id TEXT            -- such as 'com.apple.Safari'; some programs have none
         );
+        CREATE TABLE IF NOT EXISTS audio_span (
+            id INTEGER PRIMARY KEY,   -- PR-11: that sound was on, and when; never what was playing
+            started_at TEXT NOT NULL, -- UTC timestamp
+            ended_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS mode_declaration (
             id INTEGER PRIMARY KEY,
             started_at TEXT NOT NULL, -- UTC timestamp

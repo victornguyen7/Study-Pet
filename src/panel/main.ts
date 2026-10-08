@@ -38,6 +38,7 @@ type Feed = {
   set: boolean;
   file: boolean; // set from an uploaded .ics file rather than an address
   account: boolean; // set by signing in (Google only)
+  signed_in_at: string | null; // null for a sign-in made before the time was kept
   // ok_at: the last good sync, kept while syncs fail
   status: { at: string; error?: string; ok_at?: string | null; tasks?: number; events?: number } | null;
 };
@@ -275,12 +276,23 @@ async function loadEvents() {
   );
 }
 
+// Google ends a sign-in after this many days while the Cloud project is in "Testing"
+// (docs/google_calendar_oauth.md). Take the countdown out when the project is "In production".
+const SIGN_IN_DAYS = 7;
+/** " Sign in again in 3 days." for a sign-in whose time is known, else "". */
+function signInLeft(signedInAt: string | null, now = Date.now()) {
+  if (!signedInAt) return "";
+  const days = Math.ceil((Date.parse(signedInAt) - now) / 864e5) + SIGN_IN_DAYS;
+  return days > 0 ? ` Sign in again in ${plural(days, "day")}.` : " The sign-in has run out: sign in again.";
+}
+
 function feedStatus(f: Feed) {
   if (!f.set) return "Not connected.";
   if (!f.status) return "Not synced yet.";
-  if (f.status.error) return `Last sync failed at ${clock(f.status.at)}: ${f.status.error}.`;
+  const left = signInLeft(f.signed_in_at);
+  if (f.status.error) return `Last sync failed at ${clock(f.status.at)}: ${f.status.error}.${left}`;
   const counts = [f.status.tasks && plural(f.status.tasks, "assignment"), plural(f.status.events ?? 0, "event")];
-  return `${f.account ? "Signed in. Synced" : f.file ? "Read from your file" : "Synced"} at ${clock(f.status.at)}: ${counts.filter(Boolean).join(", ")}.`;
+  return `${f.account ? "Signed in. Synced" : f.file ? "Read from your file" : "Synced"} at ${clock(f.status.at)}: ${counts.filter(Boolean).join(", ")}.${left}`;
 }
 
 /** Today says so when a connected feed has gone a day without a good sync; the reason is in Settings. */
@@ -577,6 +589,9 @@ async function loadSites() {
   timeRows("sites", sites.map((s) => [s.domain, s.seconds]));
   const apps = await invoke<{ app: string; seconds: number }[]>("app_time");
   timeRows("apps", apps.map((a) => [a.app, a.seconds]));
+  // PR-11: only that sound was on
+  const audio = await invoke<number>("audio_time");
+  $("audio-today").textContent = audio >= 60 ? `Sound on for ${duration(audio / 60)} today.` : "";
 }
 // the list also reloads by itself once a minute, with the rest of the day
 $("sites-refresh").onclick = () => run(loadSites);

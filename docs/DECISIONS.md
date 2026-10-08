@@ -463,9 +463,9 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 ### The pet's face follows one sample, and its states are CSS classes
 - **Why:** built on 2026-10-07. The states need to change within seconds, so they follow the mode of the single thing in front now, which the sidecar's `drift` call already works out, not the smoothed labels of the day.
 - **Detail:** `main.ts` sets `relaxing`, `headphones`, `nudging` and `happy` on the pet each second; `pet.css` draws them with `scale`, `rotate` and `translate` so they add up. Headphones are a second picture on the slime's 24 x 16 grid. With reduced motion on, the pet still lies down and wears headphones but does not rock, hop or bob.
-- **Detail:** audio comes from Chrome's own "this tab is playing" flag, sent as one true or false. The app keeps it for 10 seconds, in memory only.
-- **Gave up:** music from Spotify or Apple Music outside Chrome puts no headphones on. There is no "audio on" log, since nothing would read it yet. The face can be up to 5 seconds behind, and it keeps its last state while the pet's own panel is in front or a break runs. Work has no look of its own, and Sleeping is not built.
-- **Revisit when:** the wrap-up wants to show listening time (then log it), or a native way to ask macOS what is playing is added.
+- **Detail:** changed on 2026-10-08. Audio is on when any program is using the sound output in use (`audio_running` in `monitor.rs`, one question to Core Audio every 5 seconds, no permission needed), or when Chrome's extension says a tab is playing. Each such sample grows a row in `audio_span`, which holds a start and an end and nothing else (PR-11); Wrap up shows the day's total.
+- **Gave up:** "using" is not "audible": a call, a player that keeps the output open while paused and a muted laptop all count, and nothing tells music from speech, so the pet wears headphones in a video call too. The face can be up to 5 seconds behind, and it keeps its last state while the pet's own panel is in front or a break runs. Work has no look of its own, and Sleeping is not built.
+- **Revisit when:** headphones in a call annoy (then ask Core Audio which process holds the output and leave call apps out).
 
 ### Phase 3 was finished in one pass, with the smallest version of each remaining piece
 - **Why:** asked for on 2026-10-07, to be tested by hand afterwards. Each piece below is the least that meets its line in the spec; the limits are items 65 to 78 in `KNOWN_ISSUES.md`.

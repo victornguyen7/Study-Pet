@@ -208,6 +208,7 @@ pub fn run() {
             browser::site_time,
             #[cfg(target_os = "macos")]
             monitor::app_time,
+            monitor::audio_time,
             #[cfg(target_os = "macos")]
             monitor::accessibility
         ])
@@ -314,7 +315,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "macos")]
     fn front_app_samples_join_into_spans() {
-        use monitor::{app_time_today, gate, record_app};
+        use monitor::{app_time_today, audio_time_today, gate, record_app, record_audio};
         // PR-1: a Private app is stored without its name or bundle ID, whatever the case of the ID
         let app = |name: &str, id: Option<&str>| gate((name.to_string(), id.map(Into::into)));
         assert_eq!(app("Messages", Some("com.apple.MobileSMS")), ("Private".into(), None));
@@ -339,6 +340,16 @@ mod tests {
         if today {
             assert_eq!(app_time_today(&conn).unwrap(), [json!({ "app": "Preview", "seconds": 10 }), json!({ "app": "Code", "seconds": 5 })]);
         }
+
+        // PR-11: samples of sound join the same way, and only the time is kept
+        for at in [0, 5, 10, 600, 605] {
+            record_audio(&conn, t + at).unwrap();
+        }
+        let spans: i64 = conn.query_row("SELECT count(*) FROM audio_span", [], |r| r.get(0)).unwrap();
+        assert_eq!(spans, 2);
+        if today {
+            assert_eq!(audio_time_today(&conn).unwrap(), 15);
+        }
     }
 
     /// Asks macOS for the app really in front, from a thread as the monitor does:
@@ -350,6 +361,7 @@ mod tests {
         let front = std::thread::spawn(monitor::front_app).join().unwrap();
         println!("accessibility allowed: {}", monitor::accessibility(false)); // only checks, never asks
         println!("password field has the keyboard: {}", monitor::password_field_focused());
+        println!("sound output in use: {}", monitor::audio_running());
         println!("{front:?}");
         assert!(front.is_some_and(|(name, _)| !name.is_empty()));
     }
@@ -617,8 +629,8 @@ mod tests {
         assert_eq!(
             list,
             json!([
-                { "source": "canvas", "set": false, "file": false, "account": false, "status": null },
-                { "source": "google", "set": true, "file": false, "account": false, "status": null }
+                { "source": "canvas", "set": false, "file": false, "account": false, "signed_in_at": null, "status": null },
+                { "source": "google", "set": true, "file": false, "account": false, "signed_in_at": null, "status": null }
             ])
         );
         // an uploaded file takes the address's place, and an address takes it back
@@ -626,10 +638,10 @@ mod tests {
         assert!(save_feed_file(&conn, "google", &"x".repeat(MAX_ICS_BYTES + 1)).is_err());
         save_feed_file(&conn, "google", "BEGIN:VCALENDAR").unwrap();
         assert_eq!((urls(&conn).len(), feed_files(&conn).unwrap()), (0, vec![("google", "BEGIN:VCALENDAR".to_string())]));
-        assert_eq!(json!(feed_list(&conn).unwrap())[1], json!({ "source": "google", "set": true, "file": true, "account": false, "status": null }));
+        assert_eq!(json!(feed_list(&conn).unwrap())[1], json!({ "source": "google", "set": true, "file": true, "account": false, "signed_in_at": null, "status": null }));
         // signing in takes the file's place: a source holds one of address, file or account
         replace_feed(&conn, "google", "feed_account_", "1").unwrap();
-        assert_eq!(json!(feed_list(&conn).unwrap())[1], json!({ "source": "google", "set": true, "file": false, "account": true, "status": null }));
+        assert_eq!(json!(feed_list(&conn).unwrap())[1], json!({ "source": "google", "set": true, "file": false, "account": true, "signed_in_at": null, "status": null }));
         assert_eq!((urls(&conn).len(), feed_files(&conn).unwrap().len()), (0, 0));
         save_feed_url(&conn, kc, "google", secret).unwrap();
         assert_eq!((urls(&conn).len(), feed_files(&conn).unwrap().len()), (1, 0));
@@ -657,10 +669,11 @@ mod tests {
         let events: i64 = conn.query_row("SELECT count(*) FROM calendar_event", [], |r| r.get(0)).unwrap();
         assert_eq!((urls(&conn).len(), events), (0, 0));
         assert_eq!(keychain_get(kc, "feed_url_google"), Ok(None)); // and the Keychain item with it
-        // disconnecting clears an account too
-        replace_feed(&conn, "google", "feed_account_", "1").unwrap();
+        // disconnecting clears an account too, and until then the list says when it was signed in
+        replace_feed(&conn, "google", "feed_account_", "2026-10-08T15:00:00Z").unwrap();
+        assert_eq!(json!(feed_list(&conn).unwrap())[1]["signed_in_at"], "2026-10-08T15:00:00Z");
         save_feed_url(&conn, kc, "google", "").unwrap();
-        assert_eq!(json!(feed_list(&conn).unwrap())[1], json!({ "source": "google", "set": false, "file": false, "account": false, "status": null }));
+        assert_eq!(json!(feed_list(&conn).unwrap())[1], json!({ "source": "google", "set": false, "file": false, "account": false, "signed_in_at": null, "status": null }));
 
         // an uploaded file goes through the same fetcher, with no download
         let google = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../backend/tests/google.ics")).unwrap();

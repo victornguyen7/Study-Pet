@@ -63,7 +63,7 @@ async function resize(grow: boolean) {
 }
 
 // ---- Drift ladder: Drift.update in backend/drift.py, sent with each sample of the front app ----
-// `mode` is what is in front right now (not smoothed), `audio` whether a tab in Chrome is playing.
+// `mode` is what is in front right now (not smoothed), `audio` whether any app is playing sound.
 type DriftState = {
   step: 0 | 1 | 2 | 3 | 4; // 4: the site is blocked, if the user opted in (Settings)
   seconds: number;

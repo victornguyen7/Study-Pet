@@ -134,6 +134,59 @@ pub(crate) fn record_app(conn: &Connection, app: &str, bundle_id: Option<&str>, 
     Ok(())
 }
 
+// ---- Background audio (PR-11): that sound is on, from any app, and never what is playing ----
+
+/// Whether any program is using the sound output in use (speakers, headphones).
+// ponytail: "using", not "audible". A call, or a player that keeps the output open while paused,
+// counts as sound, and so does a muted laptop. Nothing says music from speech either.
+pub(crate) fn audio_running() -> bool {
+    use std::ffi::c_void;
+    #[link(name = "CoreAudio", kind = "framework")]
+    extern "C" {
+        fn AudioObjectGetPropertyData(object: u32, address: *const [u32; 3], qualifier_size: u32, qualifier: *const c_void, size: *mut u32, data: *mut c_void) -> i32;
+    }
+    // an AudioObjectPropertyAddress: selector, scope ('glob'), element (main)
+    let read = |object: u32, selector: &[u8; 4]| -> Option<u32> {
+        let address = [u32::from_be_bytes(*selector), u32::from_be_bytes(*b"glob"), 0];
+        let (mut value, mut size) = (0u32, 4u32);
+        let error = unsafe { AudioObjectGetPropertyData(object, &address, 0, std::ptr::null(), &mut size, (&mut value as *mut u32).cast()) };
+        (error == 0).then_some(value)
+    };
+    // kAudioObjectSystemObject's default output device, then its "is running somewhere"
+    read(1, b"dOut").and_then(|device| read(device, b"gone")).is_some_and(|running| running != 0)
+}
+
+/// Adds one sample of sound at `now` (epoch seconds): the open span grows, or a new one starts.
+pub(crate) fn record_audio(conn: &Connection, now: i64) -> rusqlite::Result<()> {
+    let grown = conn.execute(
+        "UPDATE audio_span SET ended_at = strftime('%Y-%m-%dT%H:%M:%SZ', ?1, 'unixepoch')
+         WHERE id = (SELECT max(id) FROM audio_span) AND ?1 - unixepoch(ended_at) <= ?2",
+        (now, GAP_SECS),
+    )?;
+    if grown == 0 {
+        conn.execute(
+            "INSERT INTO audio_span (started_at, ended_at) VALUES (strftime('%Y-%m-%dT%H:%M:%SZ', ?1, 'unixepoch'), strftime('%Y-%m-%dT%H:%M:%SZ', ?1, 'unixepoch'))",
+            [now],
+        )?;
+    }
+    Ok(())
+}
+
+/// Today's seconds with sound on.
+pub(crate) fn audio_time_today(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT coalesce(sum(unixepoch(ended_at) - unixepoch(started_at)), 0) FROM audio_span
+         WHERE date(started_at, 'localtime') = date('now', 'localtime')",
+        [],
+        |r| r.get(0),
+    )
+}
+
+#[tauri::command]
+pub(crate) fn audio_time(db: State<Db>) -> Result<i64, String> {
+    audio_time_today(&lock(&db.0)).map_err(|e| e.to_string())
+}
+
 /// Samples the front app every 5 s, except during a break (C-4) and with nobody at the keyboard.
 pub(crate) fn start(app: AppHandle) {
     std::thread::spawn(move || {
@@ -143,6 +196,13 @@ pub(crate) fn start(app: AppHandle) {
             let now = chrono::Utc::now().timestamp();
             if paused(now) {
                 continue;
+            }
+            // sound is noted whatever is in front, and with nobody at the keyboard: music plays on
+            let audio = audio_running() || crate::browser::audio_on(now);
+            if audio {
+                if let Err(e) = record_audio(&lock(&app.state::<Db>().0), now) {
+                    eprintln!("audio sample failed: {e}");
+                }
             }
             let Some((name, bundle)) = front_app().map(gate) else { continue };
             let chrome = bundle.as_deref() == Some(CHROME);
@@ -183,7 +243,7 @@ pub(crate) fn start(app: AppHandle) {
             });
             match checked {
                 Ok(mut state) => {
-                    state["audio"] = json!(crate::browser::audio_on(now));
+                    state["audio"] = json!(audio);
                     if state != drift {
                         let _ = app.emit("drift", &state);
                         drift = state;
