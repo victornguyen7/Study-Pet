@@ -593,8 +593,11 @@ async function loadSites() {
   const audio = await invoke<number>("audio_time");
   $("audio-today").textContent = audio >= 60 ? `Sound on for ${duration(audio / 60)} today.` : "";
 }
-// the list also reloads by itself once a minute, with the rest of the day
-$("sites-refresh").onclick = () => run(loadSites);
+// Every headline in Wrap up has a Refresh button. Each one asks for the streak again, and its
+// answer redraws the whole day (onStreak, below), so no list is left older than another.
+// The day also reloads by itself once a minute.
+for (const button of document.querySelectorAll<HTMLButtonElement>(".refresh"))
+  button.onclick = () => run(() => invoke("streak"));
 
 async function loadDay(streak: StreakState) {
   const day = await invoke<Day>("day");

@@ -115,14 +115,23 @@
       <h1 id="wrap-total"></h1>
       <p id="wrap-streak"></p>
       <section>
-        <h2>Last 7 days</h2>
+        <div class="row head">
+          <h2>Last 7 days</h2>
+          <button class="refresh" aria-label="Refresh Last 7 days">Refresh</button>
+        </div>
         <ol id="week"></ol>
         <p class="muted">Filled days reached your daily goal.</p>
       </section>
       <section>
-        <h2>Time by mode today</h2>
+        <div class="row head">
+          <h2>Time by mode today</h2>
+          <button class="refresh" aria-label="Refresh Time by mode today">Refresh</button>
+        </div>
         <ol id="balance" class="rows"></ol>
-        <h2>Stretches</h2>
+        <div class="row head">
+          <h2>Stretches</h2>
+          <button class="refresh" aria-label="Refresh Stretches">Refresh</button>
+        </div>
         <ol id="stretches" class="rows"></ol>
         <p class="muted">
           How the pet labeled today, from the apps and sites below. A stretch under 3 minutes takes the label it
@@ -131,9 +140,9 @@
         </p>
       </section>
       <section>
-        <div id="sites-head" class="row">
+        <div class="row head">
           <h2>Sites today</h2>
-          <button id="sites-refresh">Refresh</button>
+          <button class="refresh" aria-label="Refresh Sites today">Refresh</button>
         </div>
         <ol id="sites" class="rows"></ol>
         <p class="muted">
@@ -142,7 +151,10 @@
         </p>
       </section>
       <section>
-        <h2>Apps today</h2>
+        <div class="row head">
+          <h2>Apps today</h2>
+          <button class="refresh" aria-label="Refresh Apps today">Refresh</button>
+        </div>
         <ol id="apps" class="rows"></ol>
         <p id="audio-today"></p>
         <p class="muted">

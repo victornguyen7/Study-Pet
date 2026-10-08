@@ -212,8 +212,19 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             monitor::accessibility
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app, event| {
+            // quitting stops the timer first, so the focus block in progress is stored with the
+            // minutes it ran (S-6), as if Stop had been pressed
+            // ponytail: an ordinary quit only. A crash or a force quit still loses the block; store
+            // the running block every minute if that happens in real use.
+            if let tauri::RunEvent::Exit = event {
+                if let Err(e) = timer_action(app, json!({ "action": "stop" })) {
+                    eprintln!("stopping the timer at quit failed: {e}");
+                }
+            }
+        });
 }
 
 #[cfg(test)]
@@ -269,12 +280,21 @@ mod tests {
         }
 
         // PR-1: the extension's "private" holds for two samples, and a "not private" ends it at once
-        use browser::{chrome_private, note_private};
+        use browser::{audio_on, chrome_private, note_sample};
         assert!(!chrome_private(t));
-        note_private(true, t);
+        note_sample(0, true, false, t);
         assert!(chrome_private(t + 10) && !chrome_private(t + 11));
-        note_private(false, t + 5);
+        note_sample(0, false, false, t + 5);
         assert!(!chrome_private(t + 6));
+        // two Chrome profiles: the one behind says "private" and has no sound, and must not win
+        note_sample(1, true, false, t + 6);
+        assert!(!chrome_private(t + 7));
+        note_sample(0, false, true, t + 7);
+        note_sample(1, true, false, t + 8);
+        assert!(audio_on(t + 9) && !chrome_private(t + 9));
+        // an incognito window in front: now both say "private"
+        note_sample(0, true, false, t + 10);
+        assert!(chrome_private(t + 11));
 
         // the ladder, through the sidecar: nothing is drift without a focus block, and Steam is with one
         let mut sidecar = spawn_sidecar().unwrap();
@@ -290,7 +310,7 @@ mod tests {
         let preview = json!({ "app": "Preview", "bundle_id": "com.apple.Preview", "rules": {}, "declared": null });
         assert_eq!(call(&mut sidecar, "drift", Some(preview)).unwrap()["mode"], "study");
         // PR-11: audio is on for two samples after the extension last said so
-        assert!(!browser::audio_on(t));
+        assert!(!browser::audio_on(t + 100));
 
         // PR-3: the shortcut starts 15 minutes of looking away, and pressing it again ends them
         assert!(!browser::paused(t));

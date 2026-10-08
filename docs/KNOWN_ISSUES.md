@@ -109,14 +109,14 @@ Reviewed 2026-10-07. Item numbers refer to the lists below.
 31. **Four things depend on the exact drawing.** The pet is sized 120 x 80 px for a 24 x 16 grid (`src/pet/pet.css`); the pet window is that same size, written again in both Tauri configs and as `SMALL` in `src/pet/main.ts`; the milestone stars are placed at `top: 52px` to land on the dark patch; and the two pictures must share one outline, because the open-eyed one sits under the closed one.
     *Cost if left:* a redrawn slime with another size or outline shows blurred pixels, stars in the wrong place, or the open eyes peeking out from behind the closed picture.
 32. **The wake-up splash has not been looked at in the real window.** The rest of the new pet has: the roadmap records the focus block (eyes open), the call back (hop) and a milestone star as seen, and the reinstalled app is in daily use.
-33. **The installed everyday app is a mix of frozen and live code.** The copy in `/Applications` was built at 11:08 on 2026-10-08 from `phase_3` at commit `c1daee9`, which has the fixes for items 56, 57, 71 and 74 and the sign-in countdown, and its database has the four Phase 3 tables and `audio_span`. Its window pages, icon and Rust code are frozen at build time, but it starts Python from this source tree (item 13), so every edit under `backend/` reaches it at once.
+33. **The installed everyday app is a mix of frozen and live code.** The copy in `/Applications` was built at 14:15 on 2026-10-08 from `phase_3` at commit `7341798` plus that day's changes not yet committed (two Chrome profiles no longer count as Private, a quit stores the block in progress, a Refresh button on every Wrap up headline). It has the fixes for items 56, 57, 71 and 74 and the sign-in countdown, and its database has the four Phase 3 tables and `audio_span`. Its window pages, icon and Rust code are frozen at build time, but it starts Python from this source tree (item 13), so every edit under `backend/` reaches it at once.
     *Cost if left:* a change to what the sidecar or the fetcher sends or expects, made on a dev branch, breaks the everyday app until it is rebuilt. Moving or renaming the project folder, or deleting `backend/.venv`, stops it starting the timer at all.
     *Fix:* rebuild and reinstall after any backend change; lasting fix is bundling Python (item 13).
 34. **Rebuilding the everyday app runs new migrations on real data.** Its database is in the OS app data dir and there are no down-migrations. The dev database in the project root is separate (`DECISIONS.md`, "Dev database in the project root"), so `npm run tauri dev` never touches real data; the risk starts when a new build is installed in `/Applications`.
     *Cost if left:* a faulty migration reaches the only copy of the real history.
     *What to do:* back up before every reinstall, in this order.
 
-    1. Quit Study Pet (the everyday app, not the dev one). A focus block in progress is lost when it quits, so finish or stop it first.
+    1. Quit Study Pet (the everyday app, not the dev one). A focus block in progress ends when it quits, and the minutes so far are kept.
     2. Copy the database to a dated backup beside it:
 
            cp ~/Library/Application\ Support/com.hiennguyen.pet/pet.db ~/Library/Application\ Support/com.hiennguyen.pet/pet.db.bak-$(date +%F)
@@ -221,4 +221,4 @@ Everything here was built in one day and checked by tests, a type check and a bu
 
 ## Older items, still open
 
-These predate the import and are described in `DECISIONS.md`: the database is not encrypted (PR-4), a session in progress is lost if the app quits, there is no content security policy, and the hide shortcut is fixed to Option-Shift-P.
+These predate the import and are described in `DECISIONS.md`: the database is not encrypted (PR-4), a session in progress is lost if the app crashes or is force quit (an ordinary quit stores it, since 2026-10-08), there is no content security policy, and the hide shortcut is fixed to Option-Shift-P.

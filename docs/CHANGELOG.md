@@ -8,6 +8,7 @@
 - Private windows in ordinary apps (PR-1): time is recorded as "Private" while a password field has the keyboard in any app, while a Chrome incognito window is in front, and while the page in front shows a password field. The extension (0.3.0) now tells the app with every sample whether Chrome's front window is private, and never sends such a page.
 
 **Added**
+- Every headline in Wrap up has a Refresh button (it was only on "Sites today"). Each one reloads the whole day, so the lists stay in step.
 - Sound from any app, not only Chrome, puts the pet's headphones on, and the time with sound on is logged in the new table `audio_span` (start and end only, PR-11) and shown in Wrap up. New command `audio_time`.
 - Settings counts down to the next Google sign-in ("Sign in again in 3 days"): the sign-in ends after 7 days while the Cloud project is in "Testing". The time of the sign-in is kept in `feed_account_google`; a sign-in made before this has no time and shows no countdown.
 - Time balance in the Wrap up view: seconds per mode today, and each labeled stretch of a minute or more with its times, label and the apps and sites in it.
@@ -28,6 +29,8 @@
 - The everyday app in `/Applications` was rebuilt and reinstalled on 2026-10-07 with everything here; its database gained the four new tables.
 
 **Fixed**
+- Quitting the app during a focus block stores the block with the minutes it ran, as Stop does. It used to be lost.
+- With the extension in two Chrome profiles, the profile behind no longer makes Chrome count as Private, which shut the pet's eyes during a focus block and hid that time from "Apps today" and the drift ladder. Each copy's answer is kept apart (`SAID` in `browser.rs`); the same went for Chrome's sound and the page in front.
 - Time with nobody at the keyboard is no longer counted: after 5 minutes without input the front app and Chrome's pages are not noted, unless Chrome is in front playing sound.
 - A declared mode ends at midnight, and "Relax" ends when a focus block starts. It used to last until changed, so "Relax" left on in the evening labeled the next morning.
 - A global shortcut that another program holds no longer stops the app from starting.

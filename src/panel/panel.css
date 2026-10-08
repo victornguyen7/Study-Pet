@@ -228,14 +228,19 @@ form {
 /* ---- tasks ---- */
 
 #task-head,
-#sites-head {
+.head {
   justify-content: space-between;
   margin-bottom: 6px;
 }
 
 #task-head h2,
-#sites-head h2 {
+.head h2 {
   margin: 0;
+}
+
+/* a second headline in one section (Stretches) keeps clear of the list above it */
+ol + .head {
+  margin-top: 10px;
 }
 
 #task-filter {

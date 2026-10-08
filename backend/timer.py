@@ -8,8 +8,9 @@ Every method takes `now` (epoch seconds) instead of reading the clock, so tests 
 CALLBACK_REPEAT_S = 120  # S-4: call the user back again once, 2 minutes after the break ends
 SKIPS_BEFORE_SUGGESTION = 3  # S-5
 
-# ponytail: state lives in memory only, so quitting the app mid-session drops the block in
-# progress. Persist the running block if the spec's "lose at most the last minute" starts to matter.
+# ponytail: state lives in memory only. The app stops the timer when it quits (run in
+# src-tauri/src/lib.rs), so the block in progress is stored; a crash or a force quit still drops it.
+# Persist the running block if the spec's "lose at most the last minute" starts to matter.
 
 
 class Timer:

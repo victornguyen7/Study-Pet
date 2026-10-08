@@ -3,7 +3,8 @@ use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
@@ -22,10 +23,12 @@ pub(crate) const GAP_SECS: i64 = 15;
 /// C-4: set by the timer thread during a break; samples are dropped while it is set.
 pub(crate) static PAUSED: AtomicBool = AtomicBool::new(false);
 
-/// PR-1: when the extension last said that what is in front in Chrome is private (epoch seconds), or 0.
-/// It says so for an incognito window, a page showing a password field, and whenever no window it can
-/// see has the keyboard, which is also true while Chrome is behind another app.
-static PRIVATE_AT: AtomicI64 = AtomicI64::new(0);
+/// PR-1, PR-11: what each connected copy of the extension last said, by link: (when, private, audio).
+/// There is one copy per Chrome profile. A copy says "private" for an incognito window, a page showing
+/// a password field, and whenever no window it can see has the keyboard, which is also true while
+/// Chrome is behind another app or another profile's window is in front.
+static SAID: std::sync::Mutex<BTreeMap<u64, (i64, bool, bool)>> = std::sync::Mutex::new(BTreeMap::new());
+static NEXT_LINK: AtomicU64 = AtomicU64::new(0);
 
 /// The allowed page in front in Chrome, as (when it was sent, site, address). The drift check reads it.
 static FRONT_PAGE: std::sync::Mutex<Option<(i64, String, String)>> = std::sync::Mutex::new(None);
@@ -90,22 +93,27 @@ pub(crate) fn block(site: &str, minutes: i64) {
     }
 }
 
-/// PR-11: when the extension last said a tab in Chrome is playing sound, or 0. Never which tab.
-static AUDIO_AT: AtomicI64 = AtomicI64::new(0);
+/// One sample from the copy of the extension on `link`. Never which tab is playing sound.
+pub(crate) fn note_sample(link: u64, private: bool, audio: bool, now: i64) {
+    lock(&SAID).insert(link, (now, private, audio));
+}
 
-/// Whether audio is on in Chrome, by the extension's last two samples.
+/// An answer older than two samples is not trusted: that copy of the extension may be gone.
+fn fresh(now: i64) -> Vec<(i64, bool, bool)> {
+    lock(&SAID).values().filter(|(at, ..)| now - at <= 10).copied().collect()
+}
+
+/// Whether audio is on in Chrome: some copy of the extension said so in its last two samples.
 pub(crate) fn audio_on(now: i64) -> bool {
-    now - AUDIO_AT.load(Ordering::Relaxed) <= 10
+    fresh(now).iter().any(|&(_, _, audio)| audio)
 }
 
-pub(crate) fn note_private(private: bool, now: i64) {
-    PRIVATE_AT.store(if private { now } else { 0 }, Ordering::Relaxed);
-}
-
-/// Whether Chrome, when it is the app in front, is showing something private. An answer older than
-/// two samples is not trusted: the extension may be gone.
+/// Whether Chrome, when it is the app in front, is showing something private: every copy of the
+/// extension that has spoken says so. One copy that can see the front window settles it, since the
+/// other profiles' copies say "private" only because their windows are behind.
 pub(crate) fn chrome_private(now: i64) -> bool {
-    now - PRIVATE_AT.load(Ordering::Relaxed) <= 10
+    let said = fresh(now);
+    !said.is_empty() && said.iter().all(|&(_, private, _)| private)
 }
 
 /// Fixed by the `key` in extension/manifest.json.
@@ -189,12 +197,16 @@ fn serve(app: &AppHandle, mut stream: UnixStream) {
         return;
     }
     *lock(&EXTENSION) = stream.try_clone().ok();
+    let link = NEXT_LINK.fetch_add(1, Ordering::Relaxed);
     read_frames(stream, |message| {
         let now = chrono::Utc::now().timestamp();
         let private = message["private"] == true;
-        note_private(private, now);
-        AUDIO_AT.store(if message["audio"] == true { now } else { 0 }, Ordering::Relaxed);
-        *lock(&FRONT_PAGE) = None; // until this sample names a page that may be kept
+        note_sample(link, private, message["audio"] == true, now);
+        // a "private" may come from a profile whose windows are behind, and says nothing about the
+        // page in front; chrome_private keeps that page from being used while Chrome really is private
+        if !private {
+            *lock(&FRONT_PAGE) = None; // until this sample names a page that may be kept
+        }
         // a page is only sent while Chrome has the keyboard, so sound here is sound in the app in front
         if private || paused(now) || nobody_there(idle_secs(), audio_on(now)) {
             return;
@@ -208,6 +220,7 @@ fn serve(app: &AppHandle, mut stream: UnixStream) {
             eprintln!("page sample failed: {e}");
         }
     });
+    lock(&SAID).remove(&link); // this copy is gone: its last answer must not outlive it
 }
 
 /// Opens the socket in the data folder and tells Chrome where the host is.

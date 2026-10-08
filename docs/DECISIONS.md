@@ -91,7 +91,7 @@ Requirement IDs (P-1, PR-4, ...) refer to `spec.md`.
 
 ### Timer state lives in memory only
 - **Why:** less code; only finished blocks are stored (`timer.py:11`).
-- **Gave up:** quitting mid-session loses the block in progress. The spec allows losing at most the last minute.
+- **Gave up:** a crash or a force quit mid-session loses the block in progress. The spec allows losing at most the last minute. An ordinary quit stops the timer first (`lib.rs`, on `RunEvent::Exit`), so the block is stored with the minutes it ran.
 - **Revisit when:** a block is lost in real use.
 
 ### A block of any length counts, including one stopped early
