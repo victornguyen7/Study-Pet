@@ -238,6 +238,67 @@ mod tests {
     use tasks::*;
 
     #[test]
+    fn sites_are_shown_by_name() {
+        use modes::{name_sites, rules, set_rule, site_name};
+        for (domain, name) in [
+            ("www.youtube.com", "YouTube"),
+            ("m.youtube.com", "YouTube"),
+            ("music.youtube.com", "YouTube Music"), // the longest match wins
+            ("WWW.GitHub.com", "GitHub"),
+            ("en.wikipedia.org", "Wikipedia"),
+            ("docs.google.com", "Google Docs"),
+            ("netflix.com", "Netflix"), // not "X", though it ends in "x.com"
+            // nothing on the list: the first part of the address
+            ("canvas.auckland.ac.nz", "Canvas"),
+            ("example.com", "Example"),
+            ("ünï.example", "Ünï"),
+            // no name in it: left as it is
+            ("localhost", "localhost"),
+            ("127.0.0.1", "127.0.0.1"),
+            ("", ""),
+        ] {
+            assert_eq!(site_name(domain), name, "{domain}");
+        }
+
+        let mut day = json!({
+            "unknown": [
+                { "key": "news.example.com", "name": "news.example.com", "site": true, "seconds": 300 },
+                { "key": "com.apple.preview", "name": "Preview", "site": false, "seconds": 200 },
+            ],
+            "usage": [
+                { "name": "www.youtube.com", "site": true, "seconds": 600 },
+                { "name": "Google Chrome", "site": false, "seconds": 500 },
+                { "name": "m.youtube.com", "site": true, "seconds": 100 },
+                { "name": "example.com", "site": false, "seconds": 50 }, // an app named like a site keeps its name
+            ],
+        });
+        name_sites(&mut day);
+        assert_eq!((day["unknown"][0]["name"].clone(), day["unknown"][1]["name"].clone()), (json!("News"), json!("Preview")));
+        // two addresses of one site are one row
+        assert_eq!(
+            day["usage"],
+            json!([{ "name": "YouTube", "seconds": 700 }, { "name": "Google Chrome", "seconds": 500 }, { "name": "example.com", "seconds": 50 }])
+        );
+        // a day with nothing noted
+        let mut empty = json!({ "unknown": [], "usage": [] });
+        name_sites(&mut empty);
+        assert_eq!(empty, json!({ "unknown": [], "usage": [] }));
+
+        // an answer saved before sites had names is stored under its address; an app keeps its name
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        set_rule(&conn, "www.reddit.com", "www.reddit.com", "relax").unwrap();
+        set_rule(&conn, "com.apple.preview", "Preview", "study").unwrap();
+        assert_eq!(
+            rules(&conn).unwrap(),
+            [
+                json!({ "key": "com.apple.preview", "name": "Preview", "mode": "study" }),
+                json!({ "key": "www.reddit.com", "name": "Reddit", "mode": "relax" }),
+            ]
+        );
+    }
+
+    #[test]
     fn db_seeds_presets_once() {
         let conn = Connection::open_in_memory().unwrap();
         init_db(&conn).unwrap();
