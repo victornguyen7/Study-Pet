@@ -116,16 +116,22 @@
       <p id="wrap-streak"></p>
       <section>
         <div class="row head">
-          <h2>Last 7 days</h2>
-          <button class="refresh" aria-label="Refresh Last 7 days">Refresh</button>
+          <h2>Focus</h2>
+          <button class="refresh" aria-label="Refresh Focus">Refresh</button>
         </div>
-        <ol id="week"></ol>
-        <p class="muted">Filled days reached your daily goal.</p>
+        <div id="heat"></div>
+        <p class="muted heat-key">
+          Less <span class="l0"></span><span class="l1"></span><span class="l2"></span><span class="l3"></span><span class="l4"></span>
+          More · under 1 h, 1 to 2 h, 2 to 4 h, 4 h or more of focus. Click a day to see it below.
+        </p>
       </section>
       <section>
         <div class="row head">
           <h2 id="recap-title">Today</h2>
-          <button class="refresh" aria-label="Refresh the recap">Refresh</button>
+          <span class="row">
+            <button id="back-today" hidden>Back to today</button>
+            <button class="refresh" aria-label="Refresh the recap">Refresh</button>
+          </span>
         </div>
         <div id="mode-bar" role="img"></div>
         <ol id="balance" class="rows"></ol>

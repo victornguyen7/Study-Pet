@@ -591,6 +591,38 @@ async function loadRecap() {
 for (const button of document.querySelectorAll<HTMLButtonElement>(".refresh"))
   button.onclick = () => run(() => invoke("streak"));
 
+// R-1: about four months of days, a column per week from Monday, shaded by hours of focus
+const HEAT_WEEKS = 18;
+const heatLevel = (minutes: number) => (minutes <= 0 ? 0 : minutes < 60 ? 1 : minutes < 120 ? 2 : minutes < 240 ? 3 : 4);
+// R-2: picking a day asks for the streak again, whose answer redraws the whole view (loadDay)
+function pickDay(date: string | null) {
+  recapDay = date;
+  return run(() => invoke("streak"));
+}
+$("back-today").onclick = () => pickDay(null);
+
+function showHeatmap(day: Day) {
+  // noon avoids daylight-saving edges when stepping by day
+  const today = new Date(`${day.today}T12:00:00`);
+  const d = new Date(today);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 7 * (HEAT_WEEKS - 1)); // the Monday 17 weeks back
+  const cells: HTMLElement[] = [];
+  for (; d <= today; d.setDate(d.getDate() + 1)) {
+    const date = d.toLocaleDateString("en-CA"); // "YYYY-MM-DD"
+    const minutes = day.minutes[date] ?? 0;
+    const label = `${d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}: ${
+      minutes ? duration(minutes) : "no focus"
+    }`;
+    const cell = el("button", "", `l${heatLevel(minutes)}`);
+    cell.title = label;
+    cell.setAttribute("aria-label", label);
+    cell.setAttribute("aria-pressed", String(date === (recapDay ?? day.today)));
+    cell.onclick = () => pickDay(date === day.today ? null : date);
+    cells.push(cell);
+  }
+  $("heat").replaceChildren(...cells);
+}
+
 async function loadDay(streak: StreakState) {
   const day = await invoke<Day>("day");
 
@@ -619,37 +651,27 @@ async function loadDay(streak: StreakState) {
   progress.value = Math.min(day.minutes[day.today] ?? 0, streak.threshold);
   $("streak-line").textContent = `${goal} ${plural(streak.freezes_left, "freeze")} left this month.`;
 
-  $("wrap-total").textContent = day.sessions.length
+  const todayLine = day.sessions.length
     ? `You focused for ${duration(day.minutes[day.today] ?? 0)} across ${plural(day.sessions.length, "block")} today.`
     : "Nothing logged today yet. A focus block of any length counts.";
+  // an earlier day picked in the heatmap: its focus, and its name over the recap
+  const when =
+    recapDay && new Date(`${recapDay}T12:00:00`).toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+  const then = recapDay ? (day.minutes[recapDay] ?? 0) : 0;
+  $("wrap-total").textContent = !recapDay
+    ? todayLine
+    : then
+      ? `You focused for ${duration(then)} on ${when}.`
+      : `No focus logged on ${when}.`;
+  $("recap-title").textContent = when || "Today";
+  $("back-today").hidden = !recapDay;
   $("wrap-streak").textContent =
     `${goal} Your streak is ${streakText}, with ${plural(streak.freezes_left, "freeze")} left this month.`;
 
   await loadRecap();
   await loadAsks();
 
-  // 7 days ending today; noon avoids daylight-saving edges when stepping by day
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(`${day.today}T12:00:00`);
-    d.setDate(d.getDate() - (6 - i));
-    return { date: d, minutes: day.minutes[d.toLocaleDateString("en-CA")] ?? 0 };
-  });
-  const tallest = Math.max(day.threshold, ...days.map((d) => d.minutes));
-  $("week").replaceChildren(
-    ...days.map((d, i) => {
-      const li = el("li", "", d.minutes >= day.threshold ? "counted" : "");
-      const bar = el("div", "", "bar");
-      bar.style.height = `${(d.minutes / tallest) * 100}%`;
-      const name = d.date.toLocaleDateString([], { weekday: "short" });
-      li.append(
-        el("span", String(Math.floor(d.minutes))),
-        bar,
-        el("span", name, i === 6 ? "today" : ""),
-      );
-      li.setAttribute("aria-label", `${name}: ${duration(d.minutes)}`);
-      return li;
-    }),
-  );
+  showHeatmap(day);
 }
 
 run(loadPresets);
