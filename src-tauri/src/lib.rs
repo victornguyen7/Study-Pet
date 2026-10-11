@@ -200,14 +200,10 @@ pub fn run() {
             feeds::sync_now,
             feeds::list_events,
             windows::toggle_panel,
-            modes::modes_today,
+            modes::modes_day,
             modes::declared_mode,
             modes::learned,
             modes::keeper,
-            #[cfg(unix)]
-            browser::site_time,
-            #[cfg(target_os = "macos")]
-            monitor::app_time,
             monitor::audio_time,
             #[cfg(target_os = "macos")]
             monitor::accessibility
@@ -314,7 +310,7 @@ mod tests {
 
     #[test]
     fn pages_join_into_spans_and_only_web_addresses_are_kept() {
-        use browser::{read_frames, record_page, site_time_today};
+        use browser::{read_frames, record_page};
         let conn = Connection::open_in_memory().unwrap();
         init_db(&conn).unwrap();
         let now: i64 = conn.query_row("SELECT unixepoch('now')", [], |r| r.get(0)).unwrap();
@@ -334,11 +330,6 @@ mod tests {
             .collect::<rusqlite::Result<_>>().unwrap();
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[0], ("https://canvas.edu/a".into(), "A, renamed".into()));
-        // run just after local midnight, the spans fall on yesterday and today's list is empty
-        let today: bool = conn.query_row("SELECT date(?1, 'unixepoch', 'localtime') = date('now', 'localtime')", [t], |r| r.get(0)).unwrap();
-        if today {
-            assert_eq!(site_time_today(&conn).unwrap(), [json!({ "domain": "canvas.edu", "seconds": 10 }), json!({ "domain": "docs.rs", "seconds": 5 })]);
-        }
 
         // PR-1: the extension's "private" holds for two samples, and a "not private" ends it at once
         use browser::{audio_on, chrome_private, note_sample};
@@ -396,7 +387,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "macos")]
     fn front_app_samples_join_into_spans() {
-        use monitor::{app_time_today, audio_time_today, gate, record_app, record_audio};
+        use monitor::{audio_time_on, gate, record_app, record_audio};
         // PR-1: a Private app is stored without its name or bundle ID, whatever the case of the ID
         let app = |name: &str, id: Option<&str>| gate((name.to_string(), id.map(Into::into)));
         assert_eq!(app("Messages", Some("com.apple.MobileSMS")), ("Private".into(), None));
@@ -418,9 +409,6 @@ mod tests {
         assert_eq!(spans, [("Preview".into(), 10), ("Code".into(), 5), ("Code".into(), 0)]);
         // run just after local midnight, the spans fall on yesterday and today's list is empty
         let today: bool = conn.query_row("SELECT date(?1, 'unixepoch', 'localtime') = date('now', 'localtime')", [t], |r| r.get(0)).unwrap();
-        if today {
-            assert_eq!(app_time_today(&conn).unwrap(), [json!({ "app": "Preview", "seconds": 10 }), json!({ "app": "Code", "seconds": 5 })]);
-        }
 
         // PR-11: samples of sound join the same way, and only the time is kept
         for at in [0, 5, 10, 600, 605] {
@@ -429,8 +417,10 @@ mod tests {
         let spans: i64 = conn.query_row("SELECT count(*) FROM audio_span", [], |r| r.get(0)).unwrap();
         assert_eq!(spans, 2);
         if today {
-            assert_eq!(audio_time_today(&conn).unwrap(), 15);
+            assert_eq!(audio_time_on(&conn, None).unwrap(), 15);
         }
+        // a day with nothing noted, and a string that is no day
+        assert_eq!((audio_time_on(&conn, Some("2000-01-01")).unwrap(), audio_time_on(&conn, Some("not a day")).unwrap()), (0, 0));
     }
 
     /// Asks macOS for the app really in front, from a thread as the monitor does:
@@ -452,7 +442,7 @@ mod tests {
         use modes::{declare, declared, is_private, mode_input, rules, set_rule, take_question};
         let conn = Connection::open_in_memory().unwrap();
         init_db(&conn).unwrap();
-        assert_eq!(mode_input(&conn).unwrap(), json!({ "apps": [], "pages": [], "sessions": [], "declarations": [], "rules": {} }));
+        assert_eq!(mode_input(&conn, None).unwrap(), json!({ "apps": [], "pages": [], "sessions": [], "declarations": [], "rules": {} }));
         // 20 min ago: 10 min on a course site in Chrome, then 5 min in an app nothing knows
         let now: i64 = conn.query_row("SELECT unixepoch('now')", [], |r| r.get(0)).unwrap();
         let t = now - 1200;
@@ -465,8 +455,15 @@ mod tests {
         declare(&conn, Some("study")).unwrap();
         assert!(declare(&conn, Some("nap")).is_err());
         assert_eq!(declared(&conn).unwrap().as_deref(), Some("study"));
-        let input = mode_input(&conn).unwrap();
+        let input = mode_input(&conn, None).unwrap();
         assert_eq!((input["apps"][1]["bundle_id"].clone(), input["declarations"].as_array().unwrap().len()), (Value::Null, 2));
+        // R-2: any local day can be asked for. One with nothing noted, or a string that is no day, is empty
+        let that_day: String = conn.query_row("SELECT date(?1, 'unixepoch', 'localtime')", [t], |r| r.get(0)).unwrap();
+        assert_eq!(mode_input(&conn, Some(&that_day)).unwrap()["pages"].as_array().unwrap().len(), 1);
+        for day in ["2000-01-01", "not a day", ""] {
+            let empty = mode_input(&conn, Some(day)).unwrap();
+            assert_eq!((empty["apps"].clone(), empty["pages"].clone(), empty["declarations"].clone()), (json!([]), json!([]), json!([])), "{day:?}");
+        }
 
         // run just after local midnight, the spans fall on yesterday and there is nothing to label
         let today: bool = conn.query_row("SELECT date(?1, 'unixepoch', 'localtime') = date('now', 'localtime')", [t], |r| r.get(0)).unwrap();
@@ -476,6 +473,10 @@ mod tests {
             // the 5 unknown minutes take the label they follow
             assert_eq!(day["totals"], json!({ "study": 900 }));
             assert_eq!(day["spans"][0]["source"], "rule");
+            // the time per app and site, with the site by name
+            let mut day = day;
+            modes::name_sites(&mut day);
+            assert_eq!(day["usage"], json!([{ "name": "Canvas", "seconds": 600 }, { "name": "Preview", "seconds": 300 }]));
         }
         declare(&conn, None).unwrap();
         assert_eq!(declared(&conn).unwrap(), None);
@@ -506,11 +507,11 @@ mod tests {
         assert_eq!(take_question(&conn, &unknown).unwrap().as_deref(), Some("What is Preview for? Open the panel and tell me."));
         assert_eq!(take_question(&conn, &unknown).unwrap().as_deref(), Some("What is canvas.school.edu for? Open the panel and tell me."));
         assert_eq!(take_question(&conn, &unknown).unwrap(), None);
-        assert_eq!((rules(&conn).unwrap().len(), mode_input(&conn).unwrap()["rules"].clone()), (0, json!({})));
+        assert_eq!((rules(&conn).unwrap().len(), mode_input(&conn, None).unwrap()["rules"].clone()), (0, json!({})));
         set_rule(&conn, "Preview", "Preview", "study").unwrap();
         set_rule(&conn, "preview", "Preview", "work").unwrap(); // a second answer replaces the first
         assert!(set_rule(&conn, "preview", "Preview", "nap").is_err());
-        assert_eq!(mode_input(&conn).unwrap()["rules"], json!({ "preview": "work" }));
+        assert_eq!(mode_input(&conn, None).unwrap()["rules"], json!({ "preview": "work" }));
         assert_eq!(rules(&conn).unwrap(), [json!({ "key": "preview", "name": "Preview", "mode": "work" })]);
         // Private takes the name off what is already stored, and the gate keeps new samples out
         set_rule(&conn, "preview", "Preview", "private").unwrap();

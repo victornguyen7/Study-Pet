@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager};
 
 use crate::db::{lock, Db};
 
@@ -260,20 +260,4 @@ pub(crate) fn start(app: AppHandle, dir: &Path, home: &Path) -> std::io::Result<
         "allowed_origins": [format!("chrome-extension://{EXTENSION_ID}/")],
     });
     fs::write(hosts.join(format!("{name}.json")), manifest.to_string())
-}
-
-/// Today's seconds per site, longest first.
-pub(crate) fn site_time_today(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
-    conn.prepare(
-        "SELECT domain, sum(unixepoch(ended_at) - unixepoch(started_at)) FROM activity_span
-         WHERE date(started_at, 'localtime') = date('now', 'localtime')
-         GROUP BY domain ORDER BY 2 DESC",
-    )?
-    .query_map([], |r| Ok(json!({ "domain": r.get::<_, String>(0)?, "seconds": r.get::<_, i64>(1)? })))?
-    .collect()
-}
-
-#[tauri::command]
-pub(crate) fn site_time(db: State<Db>) -> Result<Vec<Value>, String> {
-    site_time_today(&lock(&db.0)).map_err(|e| e.to_string())
 }

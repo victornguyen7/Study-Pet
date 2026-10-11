@@ -172,19 +172,21 @@ pub(crate) fn record_audio(conn: &Connection, now: i64) -> rusqlite::Result<()> 
     Ok(())
 }
 
-/// Today's seconds with sound on.
-pub(crate) fn audio_time_today(conn: &Connection) -> rusqlite::Result<i64> {
+/// Seconds with sound on during one local day ("YYYY-MM-DD"; today when `day` is None).
+pub(crate) fn audio_time_on(conn: &Connection, day: Option<&str>) -> rusqlite::Result<i64> {
     conn.query_row(
-        "SELECT coalesce(sum(unixepoch(ended_at) - unixepoch(started_at)), 0) FROM audio_span
-         WHERE date(started_at, 'localtime') = date('now', 'localtime')",
-        [],
+        &format!(
+            "SELECT coalesce(sum(unixepoch(ended_at) - unixepoch(started_at)), 0) FROM audio_span WHERE {}",
+            crate::modes::ON_DAY
+        ),
+        [day],
         |r| r.get(0),
     )
 }
 
 #[tauri::command]
-pub(crate) fn audio_time(db: State<Db>) -> Result<i64, String> {
-    audio_time_today(&lock(&db.0)).map_err(|e| e.to_string())
+pub(crate) fn audio_time(db: State<Db>, day: Option<String>) -> Result<i64, String> {
+    audio_time_on(&lock(&db.0), day.as_deref()).map_err(|e| e.to_string())
 }
 
 /// Samples the front app every 5 s, except during a break (C-4) and with nobody at the keyboard.
@@ -233,7 +235,11 @@ pub(crate) fn start(app: AppHandle) {
             // also carries what its face shows: the mode of what is in front, and whether audio is on
             let checked = stored.map_err(|e| e.to_string()).and_then(|(block, front)| {
                 let site = front["domain"].as_str().map(str::to_string);
-                let state = sidecar_call(&app.state::<Backend>(), "drift", Some(front))?;
+                let mut state = sidecar_call(&app.state::<Backend>(), "drift", Some(front))?;
+                // R-5: the pet's line names the site, never its address
+                if let (Some(site), true) = (&site, state["what"].is_string()) {
+                    state["what"] = json!(crate::modes::site_name(site));
+                }
                 // step 4, once as the ladder reaches it, and only if the user opted in: a site can be
                 // blocked, an app cannot
                 if let (true, Some(site)) = (block && state["step"] == 4 && drift["step"] != 4, site) {
@@ -253,22 +259,6 @@ pub(crate) fn start(app: AppHandle) {
             }
         }
     });
-}
-
-/// Today's seconds per app, longest first.
-pub(crate) fn app_time_today(conn: &Connection) -> rusqlite::Result<Vec<Value>> {
-    conn.prepare(
-        "SELECT app, sum(unixepoch(ended_at) - unixepoch(started_at)) FROM app_span
-         WHERE date(started_at, 'localtime') = date('now', 'localtime')
-         GROUP BY app ORDER BY 2 DESC",
-    )?
-    .query_map([], |r| Ok(json!({ "app": r.get::<_, String>(0)?, "seconds": r.get::<_, i64>(1)? })))?
-    .collect()
-}
-
-#[tauri::command]
-pub(crate) fn app_time(db: State<Db>) -> Result<Vec<Value>, String> {
-    app_time_today(&lock(&db.0)).map_err(|e| e.to_string())
 }
 
 // ---- Accessibility permission (PR-10): asked for only from Settings, where it is explained ----

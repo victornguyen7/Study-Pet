@@ -494,7 +494,7 @@ function showLearned(rules: Rule[]) {
   if (!rules.length) $("learned").append(el("li", "Nothing yet.", "empty"));
 }
 async function loadAsks() {
-  const { unknown } = await invoke<{ unknown: { key: string; name: string; seconds: number }[] }>("modes_today");
+  const { unknown } = await invoke<{ unknown: { key: string; name: string; seconds: number }[] }>("modes_day");
   $("ask").hidden = !unknown.length;
   $("ask-list").replaceChildren(
     ...unknown.map((u) => {
@@ -544,54 +544,46 @@ const level = document.querySelector<HTMLElement>(".level")!;
 
 // ---- the day: today's blocks, the wrap-up and the 7-day strip ----
 
-function timeRows(list: string, rows: [string, number][]) {
+function timeRows(list: string, rows: [name: string, seconds: number, className?: string][]) {
   $(list).replaceChildren(
-    ...rows.map(([name, seconds]) => {
-      const li = el("li");
+    ...rows.map(([name, seconds, className]) => {
+      const li = el("li", "", className);
       li.append(el("span", name), el("span", duration(seconds / 60)));
       return li;
     }),
   );
-  if (!rows.length) $(list).append(el("li", "Nothing noted yet today.", "empty"));
+  if (!rows.length) $(list).append(el("li", "Nothing noted.", "empty"));
 }
 
-// Mirrors site_time_today() in src-tauri/src/browser.rs and app_time_today() in monitor.rs
-// Mirrors label_day() in backend/modes.py
-type ModeDay = {
-  spans: { start: number; end: number; mode: string | null; source: string | null; what: string[] }[];
-  totals: Record<string, number>;
-};
-const hhmm = (secs: number) => new Date(secs * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-const modeName = (mode: string | null) => (mode ? mode[0].toUpperCase() + mode.slice(1) : "Unknown");
-async function loadBalance() {
-  const day = await invoke<ModeDay>("modes_today");
-  const order = ["study", "work", "relax", "private", "unknown"];
-  timeRows("balance", order.filter((m) => day.totals[m]).map((m) => [modeName(m), day.totals[m]]));
-  // newest first; a stretch of a single 5 s sample says nothing
-  const spans = day.spans.filter((s) => s.end - s.start >= 60).reverse();
-  $("stretches").replaceChildren(
-    ...spans.map((s) => {
-      const li = el("li");
-      const what = s.what.slice(0, 3).join(", ") + (s.what.length > 3 ? ` and ${s.what.length - 3} more` : "");
-      li.append(
-        el("span", `${hhmm(s.start)} to ${hhmm(s.end)} · ${modeName(s.mode)} · ${what}`),
-        el("span", duration((s.end - s.start) / 60)),
-      );
-      return li;
+// Mirrors label_day() in backend/modes.py, after name_sites() in src-tauri/src/modes.rs
+type ModeDay = { totals: Record<string, number>; usage: { name: string; seconds: number }[] };
+const MODE_ORDER = ["study", "work", "relax", "private", "unknown"];
+const modeName = (mode: string) => mode[0].toUpperCase() + mode.slice(1);
+// R-2: the day the recap shows, "YYYY-MM-DD"; null is today
+let recapDay: string | null = null;
+
+// R-3 and R-4: one bar of the day's modes, and one total per app and site
+async function loadRecap() {
+  const day = await invoke<ModeDay>("modes_day", { day: recapDay });
+  const modes = MODE_ORDER.filter((m) => day.totals[m]);
+  const bar = $("mode-bar");
+  bar.hidden = !modes.length;
+  bar.setAttribute("aria-label", modes.map((m) => `${modeName(m)} ${duration(day.totals[m] / 60)}`).join(", "));
+  bar.replaceChildren(
+    ...modes.map((m) => {
+      const part = el("span", "", `mode-${m}`);
+      part.style.flexGrow = String(day.totals[m]);
+      part.title = `${modeName(m)}: ${duration(day.totals[m] / 60)}`;
+      return part;
     }),
   );
-  if (!spans.length) $("stretches").append(el("li", "Nothing of a minute or more yet today.", "empty"));
-}
-
-async function loadSites() {
-  await loadBalance();
-  const sites = await invoke<{ domain: string; seconds: number }[]>("site_time");
-  timeRows("sites", sites.map((s) => [s.domain, s.seconds]));
-  const apps = await invoke<{ app: string; seconds: number }[]>("app_time");
-  timeRows("apps", apps.map((a) => [a.app, a.seconds]));
+  // the list under the bar is its legend: a swatch, the mode and the time
+  timeRows("balance", modes.map((m) => [modeName(m), day.totals[m], `mode-${m}`]));
+  // under a minute is a glance, and a long tail of them hides the day
+  timeRows("usage", day.usage.filter((u) => u.seconds >= 60).map((u) => [u.name, u.seconds]));
   // PR-11: only that sound was on
-  const audio = await invoke<number>("audio_time");
-  $("audio-today").textContent = audio >= 60 ? `Sound on for ${duration(audio / 60)} today.` : "";
+  const audio = await invoke<number>("audio_time", { day: recapDay });
+  $("audio-today").textContent = audio >= 60 ? `Sound on for ${duration(audio / 60)}.` : "";
 }
 // Every headline in Wrap up has a Refresh button. Each one asks for the streak again, and its
 // answer redraws the whole day (onStreak, below), so no list is left older than another.
@@ -633,7 +625,7 @@ async function loadDay(streak: StreakState) {
   $("wrap-streak").textContent =
     `${goal} Your streak is ${streakText}, with ${plural(streak.freezes_left, "freeze")} left this month.`;
 
-  await loadSites();
+  await loadRecap();
   await loadAsks();
 
   // 7 days ending today; noon avoids daylight-saving edges when stepping by day

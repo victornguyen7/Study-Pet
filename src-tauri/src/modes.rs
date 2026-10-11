@@ -41,29 +41,34 @@ pub(crate) fn declared(conn: &Connection) -> rusqlite::Result<Option<String>> {
     conn.query_row("SELECT mode FROM mode_declaration WHERE ended_at IS NULL", [], |r| r.get(0)).optional()
 }
 
-/// What backend/modes.py label_day needs for today, with times as epoch seconds.
-pub(crate) fn mode_input(conn: &Connection) -> rusqlite::Result<Value> {
+/// Rows that started on one local day: `?1` is "YYYY-MM-DD", or NULL for today. A string that is no
+/// day matches nothing.
+pub(crate) const ON_DAY: &str = "date(started_at, 'localtime') = coalesce(?1, date('now', 'localtime'))";
+
+/// What backend/modes.py label_day needs for one local day (today when `day` is None), with times as
+/// epoch seconds.
+pub(crate) fn mode_input(conn: &Connection, day: Option<&str>) -> rusqlite::Result<Value> {
     // SQLite writes each list as JSON text
     let list = |fields: &str, from: &str| -> rusqlite::Result<Value> {
         let text: String = conn.query_row(
             &format!("SELECT json_group_array(json_object({fields})) FROM (SELECT * FROM {from} ORDER BY rowid)"),
-            [],
+            [day],
             |r| r.get(0),
         )?;
         Ok(serde_json::from_str(&text).unwrap_or_default())
     };
     expire(conn)?;
     let span = "'start', unixepoch(started_at), 'end', unixepoch(ended_at)";
-    let today = "date(started_at, 'localtime') = date('now', 'localtime')";
     Ok(json!({
-        "apps": list(&format!("{span}, 'app', app, 'bundle_id', bundle_id"), &format!("app_span WHERE {today}"))?,
-        "pages": list(&format!("{span}, 'domain', domain"), &format!("activity_span WHERE {today}"))?,
-        "sessions": list(span, &format!("session WHERE ended_at IS NOT NULL AND {today}"))?,
+        "apps": list(&format!("{span}, 'app', app, 'bundle_id', bundle_id"), &format!("app_span WHERE {ON_DAY}"))?,
+        "pages": list(&format!("{span}, 'domain', domain"), &format!("activity_span WHERE {ON_DAY}"))?,
+        "sessions": list(span, &format!("session WHERE ended_at IS NOT NULL AND {ON_DAY}"))?,
         "rules": rule_map(conn)?,
-        // one still in force runs until now
+        // a declaration ends by the midnight after it was made (expire), so it belongs to the day it
+        // started on; one still in force runs until now
         "declarations": list(
             "'start', unixepoch(started_at), 'end', unixepoch(coalesce(ended_at, 'now')), 'mode', mode",
-            "mode_declaration WHERE ended_at IS NULL OR date(ended_at, 'localtime') = date('now', 'localtime')",
+            &format!("mode_declaration WHERE {ON_DAY}"),
         )?,
     }))
 }
@@ -74,11 +79,14 @@ pub(crate) fn rule_map(conn: &Connection) -> rusqlite::Result<Value> {
         .map(|text| serde_json::from_str(&text).unwrap_or_default())
 }
 
-/// Today's labeled stretches and the seconds per mode.
+/// One local day ("YYYY-MM-DD"; today when `day` is None): its labeled stretches, the seconds per
+/// mode, what to ask about, and the time per app and site, with every site by name (R-5).
 #[tauri::command(async)]
-pub(crate) fn modes_today(app: AppHandle) -> Result<Value, String> {
-    let input = mode_input(&lock(&app.state::<Db>().0)).map_err(|e| e.to_string())?;
-    sidecar_call(&app.state::<Backend>(), "modes", Some(input))
+pub(crate) fn modes_day(app: AppHandle, day: Option<String>) -> Result<Value, String> {
+    let input = mode_input(&lock(&app.state::<Db>().0), day.as_deref()).map_err(|e| e.to_string())?;
+    let mut labeled = sidecar_call(&app.state::<Backend>(), "modes", Some(input))?;
+    name_sites(&mut labeled);
+    Ok(labeled)
 }
 
 /// The mode the user has declared, if any. Pass `set` to change it: "study", "work", "relax", or "" for none.
@@ -237,7 +245,7 @@ pub(crate) fn take_question(conn: &Connection, unknown: &Value) -> rusqlite::Res
 
 /// The question to put in the pet's bubble now, if there is a new one.
 pub(crate) fn question(app: &AppHandle) -> Result<Option<String>, String> {
-    let day = modes_today(app.clone())?;
+    let day = modes_day(app.clone(), None)?;
     take_question(&lock(&app.state::<Db>().0), &day["unknown"]).map_err(|e| e.to_string())
 }
 
@@ -299,7 +307,7 @@ pub(crate) fn studying(day: &Value, now: i64) -> bool {
 pub(crate) fn offer(app: &AppHandle) -> Result<Option<String>, String> {
     let now = chrono::Utc::now().timestamp();
     let last = LAST_OFFER.load(std::sync::atomic::Ordering::Relaxed);
-    if now - last < OFFER_EVERY_SECS || !studying(&modes_today(app.clone())?, now) {
+    if now - last < OFFER_EVERY_SECS || !studying(&modes_day(app.clone(), None)?, now) {
         return Ok(None);
     }
     LAST_OFFER.store(now, std::sync::atomic::Ordering::Relaxed);

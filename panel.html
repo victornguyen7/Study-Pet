@@ -124,44 +124,25 @@
       </section>
       <section>
         <div class="row head">
-          <h2>Time by mode today</h2>
-          <button class="refresh" aria-label="Refresh Time by mode today">Refresh</button>
+          <h2 id="recap-title">Today</h2>
+          <button class="refresh" aria-label="Refresh the recap">Refresh</button>
         </div>
+        <div id="mode-bar" role="img"></div>
         <ol id="balance" class="rows"></ol>
-        <div class="row head">
-          <h2>Stretches</h2>
-          <button class="refresh" aria-label="Refresh Stretches">Refresh</button>
-        </div>
-        <ol id="stretches" class="rows"></ol>
         <p class="muted">
-          How the pet labeled today, from the apps and sites below. A stretch under 3 minutes takes the label it
-          interrupts; “unknown” is time in something the pet could not place. A wrong label? Answer the pet's
-          question in Today, or change the answer in Settings.
+          How the pet labeled the day, from the apps and sites below. “Unknown” is time in something the pet could
+          not place. A wrong label? Answer the pet's question in Today, or change the answer in Settings.
         </p>
       </section>
       <section>
-        <div class="row head">
-          <h2>Sites today</h2>
-          <button class="refresh" aria-label="Refresh Sites today">Refresh</button>
-        </div>
-        <ol id="sites" class="rows"></ol>
-        <p class="muted">
-          From the Chrome extension, for pages you said yes to: the page's address, its title and the time it was in
-          front. Not during breaks, and only while Study Pet is running.
-        </p>
-      </section>
-      <section>
-        <div class="row head">
-          <h2>Apps today</h2>
-          <button class="refresh" aria-label="Refresh Apps today">Refresh</button>
-        </div>
-        <ol id="apps" class="rows"></ol>
+        <h2>Apps and sites</h2>
+        <ol id="usage" class="rows"></ol>
         <p id="audio-today"></p>
         <p class="muted">
-          The app in front, checked every 5 seconds: its name and the time only, never the window's title or what is
-          in it. Password managers, chat and mail apps are counted together as “Private”, without their names. Not
-          during breaks, and only while Study Pet is running. Sound is noted as on or off, from any app, never what
-          was playing.
+          The time each app and site was in front, checked every 5 seconds: its name and the time only. A site is
+          listed only if you said yes to it in the Chrome extension; the rest of the browser's time is under the
+          browser. Password managers, chat and mail apps are counted together as “Private”. Not during breaks, and
+          only while Study Pet is running. Sound is noted as on or off, never what was playing.
         </p>
       </section>
     </main>

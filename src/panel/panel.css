@@ -8,6 +8,10 @@
   --line: #d3e0e2;
   --pond: #3993af;
   --star: #b07c00;
+  /* the recap's modes; checked against --surface with the dataviz palette validator */
+  --study: #2a78d6;
+  --work: #eb6834;
+  --relax: #1baf7a;
   color-scheme: light dark;
 }
 
@@ -19,6 +23,9 @@
     --muted: #9db6bb;
     --line: #2b4852;
     --star: #ffd166;
+    --study: #3987e5;
+    --work: #d95926;
+    --relax: #199e70;
   }
 }
 
@@ -238,11 +245,6 @@ form {
   margin: 0;
 }
 
-/* a second headline in one section (Stretches) keeps clear of the list above it */
-ol + .head {
-  margin-top: 10px;
-}
-
 #task-filter {
   gap: 4px;
 }
@@ -416,6 +418,51 @@ ol + .head {
 }
 
 /* ---- wrap up ---- */
+
+/* ---- recap: one bar of the day's modes; the list under it is the legend ---- */
+
+.mode-study {
+  --mode: var(--study);
+}
+
+.mode-work {
+  --mode: var(--work);
+}
+
+.mode-relax {
+  --mode: var(--relax);
+}
+
+/* not kinds of work: Private and unknown time stay grey */
+.mode-private {
+  --mode: var(--muted);
+}
+
+.mode-unknown {
+  --mode: var(--line);
+}
+
+#mode-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  margin: 10px 0 4px;
+}
+
+#mode-bar span {
+  min-width: 3px;
+  border-radius: 4px;
+  background: var(--mode);
+}
+
+#balance li::before {
+  content: "";
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--mode);
+}
 
 /* ---- streak: the fire is grey until today counts ---- */
 
