@@ -241,6 +241,15 @@ form {
   border: 0;
 }
 
+/* a section that folds shut (Settings, "What the pet has learned") */
+summary {
+  cursor: pointer;
+}
+
+summary h2 {
+  display: inline;
+}
+
 /* ---- tasks ---- */
 
 #task-head,
@@ -464,7 +473,7 @@ form {
   background: var(--mode);
 }
 
-#balance li::before {
+#balance li:not(.empty)::before {
   content: "";
   flex: none;
   width: 10px;

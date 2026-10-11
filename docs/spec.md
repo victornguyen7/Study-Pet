@@ -118,12 +118,12 @@ The Wrap up view answers "where did the day go?" for today or any earlier day. E
 
 | ID | Requirement | Status |
 | --- | --- | --- |
-| R-1 | **Focus heatmap.** A grid of days covering about the last four months, each day shaded by its hours of focus: none, under 1 h, 1 to 2 h, 2 to 4 h, 4 h or more. Hovering a day shows its date and hours. It replaces the "Last 7 days" strip. | Next |
-| R-2 | **Any day.** Clicking a day in the heatmap shows that day's recap (R-3 and R-4) in place of today's. Today is shown when the view opens, and one click goes back to it. | Next |
-| R-3 | **Recap by mode.** One bar split into Study, Work, Relax, Private and unknown time, with the hours of each beside it. | Next |
-| R-4 | **One list of apps and sites.** A single total per app and per site for the day, longest first. The browser's own row counts only the time not already listed under a site, so no time is counted twice. The list of stretches with times of day is removed. | Next |
-| R-5 | **Names, not addresses.** A site is shown by name everywhere in the panel and in the pet's questions: "YouTube", never `www.youtube.com`. A built-in list names common sites; any other site gets a name worked out from its address (`canvas.auckland.ac.nz` becomes "Canvas"). Apps are shown by the name the Dock shows. | Next |
-| R-6 | **A folding "What the pet has learned".** The section in Settings is closed by default and shows how many answers it holds; a click opens and closes it. | Next |
+| R-1 | **Focus heatmap.** A grid of days covering about the last four months, each day shaded by its hours of focus: none, under 1 h, 1 to 2 h, 2 to 4 h, 4 h or more. Hovering a day shows its date and hours. It replaces the "Last 7 days" strip. | Built |
+| R-2 | **Any day.** Clicking a day in the heatmap shows that day's recap (R-3 and R-4) in place of today's. Today is shown when the view opens, and one click goes back to it. | Built |
+| R-3 | **Recap by mode.** One bar split into Study, Work, Relax, Private and unknown time, with the hours of each beside it. | Built |
+| R-4 | **One list of apps and sites.** A single total per app and per site for the day, longest first. The browser's own row counts only the time not already listed under a site, so no time is counted twice. The list of stretches with times of day is removed. | Built |
+| R-5 | **Names, not addresses.** A site is shown by name everywhere in the panel and in the pet's questions: "YouTube", never `www.youtube.com`. A built-in list names common sites; any other site gets a name worked out from its address (`canvas.auckland.ac.nz` becomes "Canvas"). Apps are shown by the name the Dock shows. | Built |
+| R-6 | **A folding "What the pet has learned".** The section in Settings is closed by default and shows how many answers it holds; a click opens and closes it. | Built |
 
 **Limits that are accepted**
 
@@ -131,6 +131,9 @@ The Wrap up view answers "where did the day go?" for today or any earlier day. E
 - Apps and sites have been noted since 2026-10-07, so an earlier day has focus hours in the heatmap and an empty recap.
 - A site the user said no to in the extension is not noted, so its time shows under the browser's own row.
 - A name worked out from an address can be clumsy for an obscure site. The fix is to add that site to the built-in list.
+- Two addresses of one site are one row ("YouTube" for `www.youtube.com` and `m.youtube.com`), and so are two different sites that are given the same name.
+- An app or site in front for under a minute in a day is left off the list, so the list can add up to a little less than the bar.
+- The pet's drift lines name the site too. The Chrome extension's own popup still lists sites by address, since that is where answers are managed per site.
 
 ## Streaks
 
@@ -285,14 +288,14 @@ The pet has to be light enough to leave open all day on battery. Everything runs
 
 ## Roadmap
 
-Phases 1 to 3 are built and in daily use. There are no more phases and no gates: the app stays as it is, and small extras are added one at a time when daily use asks for them. The task list is in `ROADMAP.md`.
+Phases 1 to 4 are built. Phases 1 to 3 are in daily use; the recap of Phase 4 was built on 2026-10-11 and reaches the installed app at its next reinstall. There are no more phases and no gates: the app stays as it is, and small extras are added one at a time when daily use asks for them. The task list is in `ROADMAP.md`.
 
 | | What | Status |
 | --- | --- | --- |
 | 1 · Pet core | Pet window, sessions and breaks, presets, streaks | Built |
 | 2 · Daily list | Own tasks, quick add, Today and All views, Canvas feed, Google Calendar | Built |
 | 3 · Focus keeper and modes | Privacy gate, mode labels, music rules, drift ladder | Built |
-| 4 · Recap | Heatmap, recap by mode for any day, one list of apps and sites, names for sites, folding learned section (R-1 to R-6) | Next |
+| 4 · Recap | Heatmap, recap by mode for any day, one list of apps and sites, names for sites, folding learned section (R-1 to R-6) | Built |
 | Maybe later | Quick commands, morning brief, more task sources, database encryption, a data panel, Windows | Only if needed |
 
 ## Success metrics

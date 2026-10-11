@@ -135,7 +135,7 @@ Phases 1 to 3 are built and in daily use. On 2026-10-11 the plan changed: the kn
 
 **Gate:** dropped on 2026-10-11, and the test day with it. The "Stretches" list it was to be judged from goes away in Phase 4.
 
-## Phase 4 · Recap (next)
+## Phase 4 · Recap (built, not yet reinstalled)
 
 **Builds:** the recap in the Wrap up view, for today or any earlier day, and two tidy-ups. Nothing new is recorded: every number comes from the focus blocks and spans already stored.
 
@@ -150,16 +150,17 @@ Phases 1 to 3 are built and in daily use. On 2026-10-11 the plan changed: the kn
 **Uses:** what is already there: the `session`, `app_span`, `activity_span`, `audio_span` and `mode_declaration` tables, `label_day` in `backend/modes.py`, plain HTML and CSS for the heatmap and the bar, and the browser's own `<details>` for the folding section. No new table, package or process.
 
 **Tasks**
-- [ ] The day commands take a date: `modes_today`, `site_time`, `app_time` and `audio_time` answer for any local day, today by default
-- [ ] Focus minutes per day for the heatmap's range, from `session`
-- [ ] Site names: a built-in list plus a name worked out from the address, with tests; used in the list, the pet's questions and the learned section
-- [ ] One list of apps and sites, with the browser's row less the time under its sites, with a test
-- [ ] Recap by mode as one bar with the hours beside it
-- [ ] Heatmap in Wrap up, replacing "Last 7 days"; a click picks the day, and the headline says which day is shown
-- [ ] Take out "Stretches" and the two separate lists
-- [ ] "What the pet has learned" as a folding section with a count
-- [ ] Look at all of it in the running dev app: today, an earlier day, a day with nothing noted, light and dark
-- [ ] Update `CHANGELOG.md` and `KNOWN_ISSUES.md` (item 66 goes away; items 2, 55 and the unencrypted database stay open)
+- [x] The day commands take a date: `modes_today`, `site_time`, `app_time` and `audio_time` answer for any local day, today by default
+- [x] Focus minutes per day for the heatmap's range, from `session`
+- [x] Site names: a built-in list plus a name worked out from the address, with tests; used in the list, the pet's questions and the learned section
+- [x] One list of apps and sites, with the browser's row less the time under its sites, with a test
+- [x] Recap by mode as one bar with the hours beside it
+- [x] Heatmap in Wrap up, replacing "Last 7 days"; a click picks the day, and the headline says which day is shown
+- [x] Take out "Stretches" and the two separate lists
+- [x] "What the pet has learned" as a folding section with a count
+- [ ] Look at all of it in the running dev app: today, an earlier day, a day with nothing noted, light and dark (2026-10-11: seen only in a headless browser with made-up data, not in the real window)
+- [x] Update `CHANGELOG.md` and `KNOWN_ISSUES.md` (item 66 goes away; items 2, 55 and the unencrypted database stay open)
+- [ ] Rebuild and reinstall the everyday app when asked, backing up `pet.db` first (`KNOWN_ISSUES.md`, item 34). Until then the installed app keeps the old Wrap up view; it is not broken by this phase, since `backend/` only gained keys.
 
 **Accepted limits:** an answer given today relabels earlier days; days before 2026-10-07 have focus hours and an empty recap; a name worked out from an address can be clumsy.
 

@@ -76,7 +76,7 @@ flowchart LR
 
 ### How the layers talk
 
-- **UI to Rust:** `invoke("command_name", args)`. The commands are `timer`, `streak`, `day`, `list_presets`, `add_preset`, `delete_preset`, `set_streak_threshold`, `sounds`, `merge_task`, `list_courses`, `set_course`, `connect_google`, `add_task`, `list_tasks`, `set_task_done`, `delete_task`, `feeds`, `set_feed`, `set_feed_file`, `sync_now`, `list_events`, `toggle_panel`, `modes_today`, `declared_mode`, `learned`, `site_time`, `app_time` and `accessibility`. The last three are compiled only where they work: `site_time` on Unix, the other two on macOS.
+- **UI to Rust:** `invoke("command_name", args)`. The commands are `timer`, `streak`, `day`, `list_presets`, `add_preset`, `delete_preset`, `set_streak_threshold`, `sounds`, `merge_task`, `list_courses`, `set_course`, `connect_google`, `add_task`, `list_tasks`, `set_task_done`, `delete_task`, `feeds`, `set_feed`, `set_feed_file`, `sync_now`, `list_events`, `toggle_panel`, `modes_day`, `declared_mode`, `learned`, `keeper`, `audio_time` and `accessibility`. `accessibility` is compiled only on macOS.
 - **Rust to UI:** `timer` and `streak` events, sent to both windows at once. This is why the pet and the panel always agree. A third event, `tasks`, carries no data: it is sent after each feed sync, and the panel reloads its tasks, schedule and feed status. After its own changes the panel just reloads. A fourth, `reminder`, carries one line of text for the pet's bubble: a task due soon, "Did you submit it?", or a question about an app or site the pet does not recognize.
 - **Sounds:** the tick thread in `run` (`lib.rs`) compares each new timer state with the last one it rang for. A break that starts plays Glass, and each call back plays Ping, through `afplay` (macOS only). No window is involved, so it works with the panel closed and the pet hidden.
 - **Rust to the sidecar:** one line of JSON in, one line out: `{"method": "timer", "params": {...}}` returns `{"ok": ...}` or `{"error": ...}`. The methods are `ping`, `timer`, `streak`, `quick_add` and `modes`. An error a method raises is passed back to the caller and the process stays, because the running timer lives in it; the process is replaced only when the pipe or the reply is broken (`sidecar_call`, `sidecar.rs`). The UI cannot name a sidecar method: each one is reached through its own Rust command.
@@ -154,7 +154,7 @@ Nothing here is on the screen path of the timer; it runs beside it.
 1. **Every 5 seconds** the monitor thread (`monitor.rs`) asks macOS for the app in front. The sample passes the privacy gate first: an app on the built-in list, or one the user made Private, is kept as "Private" with no name or bundle ID. Samples of the same app join into one `app_span` row.
 2. **Every 5 seconds** the extension sends the address and title of the page in front, if the user said yes for that site. `browser.rs` drops a site the user made Private in the app, and joins samples of the same address into one `activity_span` row.
 3. **During a break** both are dropped (C-4): the tick thread sets a flag, `PAUSED`, that both check.
-4. **When asked** (`modes_today`), Rust sends today's rows from both tables, the focus blocks, the declarations and the learned rules to `label_day` in `backend/modes.py`. It returns the labeled stretches, the seconds per mode, and the apps and sites nothing recognizes. Labels are not stored.
+4. **When asked** (`modes_day`, for today or any earlier local day), Rust sends that day's rows from both tables, the focus blocks, the declarations and the learned rules to `label_day` in `backend/modes.py`. It returns the labeled stretches, the seconds per mode, the time per app and site, and the apps and sites nothing recognizes. Rust then puts a name in place of each site's address (`name_sites` in `modes.rs`). Nothing of this is stored.
 5. **Once a minute**, outside a focus block and when no task reminder is due, the tick thread takes the first unknown the pet has not asked about, marks it in `app_rule`, and sends it as a `reminder` event. The panel lists every open question; an answer is a row in `app_rule`.
 
 ### The windows and macOS Spaces
@@ -169,7 +169,7 @@ The pet is set in `tauri.conf.json` to show on every Space, so it follows the us
 
 ## The full system
 
-The plan changed on 2026-10-11: the capture worker, the encrypted store and the wrap-up builders (timelapse and knowledge graph) were dropped. What follows is the whole system as it will stay; the only part not built yet is the recap.
+The plan changed on 2026-10-11: the capture worker, the encrypted store and the wrap-up builders (timelapse and knowledge graph) were dropped. What follows is the whole system as it will stay; every part is built.
 
 ```mermaid
 flowchart TD
@@ -204,7 +204,7 @@ Read it as two separate paths that only meet at the pet window:
 | Privacy gate | 3 | Stops Private apps, sites and windows from being named | Rust | A built-in list, and rules in the `app_rule` table |
 | Mode classifier | 3 | Labels time as Study, Work, Relax or Private | Python | Rules, no model |
 | Focus keeper | 3 | Notices drift inside a focus block and escalates gently | Python | Rules, no model |
-| Recap | 4, not built | Heatmap, hours per mode and time per app and site, for any day (R-1 to R-5 in `spec.md`) | Rust + Python + UI | What is already stored |
+| Recap | 4 | Heatmap, hours per mode and time per app and site, for any day (R-1 to R-5 in `spec.md`). The panel draws the heatmap from `day`; `modes_day` labels one day's rows and names its sites | Rust + Python + UI | What is already stored |
 
 Each part plugs into the Phase 1 shape: things that watch or store go in Rust, things that decide go in Python, and the windows only draw.
 

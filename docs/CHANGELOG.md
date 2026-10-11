@@ -1,8 +1,12 @@
 # Changelog
 
-## Unreleased · Phase 3
+## Unreleased · Phases 3 and 4
 
 **Changed**
+- Wrap up is a recap of any day. A focus heatmap of the last 18 weeks replaces "Last 7 days"; a click on a day shows that day. "Time by mode" is one bar with its hours, and one list, "Apps and sites", gives a single total per app and site in place of "Sites today", "Apps today" and "Stretches". The browser's row counts only the time not under one of its sites.
+- A site is shown by name everywhere, never by address: a built-in list in `modes.rs` (`site_name`), else the first part of the address. This covers the recap, the pet's questions, its drift lines and "What the pet has learned".
+- "What the pet has learned" in Settings folds shut and shows how many answers it holds.
+- Commands: `modes_today` is now `modes_day` and takes a day; `audio_time` takes a day; `site_time` and `app_time` are gone. `label_day` also returns `usage`.
 - The Chrome extension (now 0.2.0) asks once per site and remembers the answer, where it asked on every page. Answers are kept in Chrome's storage by site; the popup lists every answered site, where each can be switched between yes and no or forgotten.
 
 - Private windows in ordinary apps (PR-1): time is recorded as "Private" while a password field has the keyboard in any app, while a Chrome incognito window is in front, and while the page in front shows a password field. The extension (0.3.0) now tells the app with every sample whether Chrome's front window is private, and never sends such a page.

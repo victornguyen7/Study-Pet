@@ -491,3 +491,26 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** fixed history. An answer given today relabels earlier days, since labels use the rules as they are now.
 - **Revisit when:** showing a day gets slow, or a past day's numbers changing becomes confusing; then store a row per day.
 
+## Phase 4 · Recap
+
+### The time per app and site comes from the same timeline as the labels
+- **Why:** `timeline` in `backend/modes.py` already cuts a browser's span around the pages in it, so adding up its pieces gives one total per app and site with no time counted twice (`usage`). The two SQL totals it replaces (`site_time`, `app_time`) counted a page's time under the site and again under Chrome.
+- **Gave up:** nothing. `label_day` only gained keys (`usage`, and `site` on each unknown), so the installed app, which runs Python from this source tree, kept working.
+- **Revisit when:** a day's spans grow large enough that labeling on every reload is slow.
+
+### One command takes a day; the heatmap needs no new command
+- **Why:** `modes_day` and `audio_time` take a local day ("YYYY-MM-DD", today when left out), through one SQL test, `ON_DAY` in `modes.rs`. A string that is no day matches nothing, so a bad date gives an empty recap and never today's numbers. The heatmap is drawn from the focus minutes per day that `day` already returned for the streak. Picking a day sets one variable in the panel and asks for the streak again, which is how every Refresh button already redraws the view.
+- **Gave up:** a declaration now belongs to the local day it was made on. One made just before midnight and ended by hand just after it is counted only on the first day.
+- **Revisit when:** the recap should cover a week or a month; then add a range, not a second command.
+
+### Site names live in Rust, as a short list and a guess
+- **Why:** three things show a site: the recap, the pet's questions and drift lines, and the learned section. All three pass through Rust, so `site_name` in `modes.rs` is the one place a name is made; Python and the panel never see a rule for it. A list of about 40 sites covers the common ones by their ending (`en.wikipedia.org` is "Wikipedia"); any other site is named after the first part of its address, capitalised.
+- **Gave up:** exact names for sites not on the list (`blog.example.com` is "Blog"), and telling apart two sites that get the same name: they are one row. An answer saved before this is stored under its address and named when read; nothing in `app_rule` says a row is a site, so the test is "the name is the key and has a dot in it".
+- **Rejected:** reading the site's own name from the page (`og:site_name`) in the extension. It is more exact, but the extension would read one more thing from every page.
+- **Revisit when:** a wrong name annoys; add the site to `SITE_NAMES`.
+
+### Colours for the recap were checked, not picked by eye
+- **Why:** the mode bar uses three hues (Study blue, Work orange, Relax green) that stay apart for colour-blind readers on both the light and the dark panel; Private and unknown time are grey, since they are not kinds of work. The heatmap is one blue in four steps, darker for more focus in light mode and brighter in dark mode. Both sets passed the dataviz palette validator against `#ffffff` and `#18323b`.
+- **Gave up:** the pet's teal as the heatmap colour. The list under the bar is its legend, so no mode is told by colour alone.
+- **Revisit when:** the panel's surface colours change; run the validator again.
+

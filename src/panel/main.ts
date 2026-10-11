@@ -492,6 +492,7 @@ function showLearned(rules: Rule[]) {
     }),
   );
   if (!rules.length) $("learned").append(el("li", "Nothing yet.", "empty"));
+  $("learned-count").textContent = plural(rules.length, "answer");
 }
 async function loadAsks() {
   const { unknown } = await invoke<{ unknown: { key: string; name: string; seconds: number }[] }>("modes_day");
