@@ -138,20 +138,36 @@ def smooth(spans):
     return _merge(out)
 
 
+def usage(spans):
+    """spans: timeline()'s pieces. -> [{name, site, seconds}], longest first: one total per app and site.
+    A page has already been cut out of its browser's span, so no time is counted twice."""
+    totals = {}
+    for s in spans:
+        row = (s.get("domain") or s["app"], bool(s.get("domain")))
+        totals[row] = totals.get(row, 0) + s["end"] - s["start"]
+    return [
+        {"name": name, "site": site, "seconds": seconds}
+        for (name, site), seconds in sorted(totals.items(), key=lambda t: -t[1])
+        if seconds > 0
+    ]
+
+
 def label_day(apps, pages, sessions=(), declarations=(), rules=None):
     """apps: [{start, end, app, bundle_id}], pages: [{start, end, domain}], sessions: [{start, end}],
     declarations: [{start, end, mode}], rules: {key: mode}. Times are epoch seconds.
     -> {"spans": [{start, end, mode, source, what: the apps and sites in it}], "totals": {mode or "unknown": seconds},
-        "unknown": [{key, name, seconds}], longest first: what to ask the user about}"""
+        "unknown": [{key, name, site, seconds}], longest first: what to ask the user about,
+        "usage": [{name, site, seconds}], longest first: the time in each app and site}"""
+    pieces = timeline(apps, pages)
     labeled, unknown = [], {}
-    for span in _cut(timeline(apps, pages), [*sessions, *declarations]):
+    for span in _cut(pieces, [*sessions, *declarations]):
         declared = _covering(declarations, span)
         mode, source = classify(span, declared and declared["mode"], rules, bool(_covering(sessions, span)))
         what = span.get("domain") or span["app"]
         labeled.append({"start": span["start"], "end": span["end"], "mode": mode, "source": source, "what": [what]})
         # a guess from context is still a guess, so it is asked about too
         if source in (None, "context", "declared") and key(span) not in BROWSERS | (rules or {}).keys() and not category(span):
-            ask = unknown.setdefault(key(span), {"key": key(span), "name": what, "seconds": 0})
+            ask = unknown.setdefault(key(span), {"key": key(span), "name": what, "site": bool(span.get("domain")), "seconds": 0})
             ask["seconds"] += span["end"] - span["start"]
     spans = smooth(labeled)
     totals = {}
@@ -159,4 +175,4 @@ def label_day(apps, pages, sessions=(), declarations=(), rules=None):
         name = s["mode"] or "unknown"
         totals[name] = totals.get(name, 0) + s["end"] - s["start"]
     asks = sorted((u for u in unknown.values() if u["seconds"] >= ASK_SECS), key=lambda u: -u["seconds"])
-    return {"spans": spans, "totals": totals, "unknown": asks}
+    return {"spans": spans, "totals": totals, "unknown": asks, "usage": usage(pieces)}

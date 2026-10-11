@@ -95,10 +95,28 @@ class ModesTest(unittest.TestCase):
             rules={"dev.zed.zed": "work"},
         )
         self.assertEqual(day["unknown"], [
-            {"key": "com.apple.preview", "name": "Preview", "seconds": 12 * MIN},
-            {"key": "news.example.com", "name": "news.example.com", "seconds": 5 * MIN},
+            {"key": "com.apple.preview", "name": "Preview", "site": False, "seconds": 12 * MIN},
+            {"key": "news.example.com", "name": "news.example.com", "site": True, "seconds": 5 * MIN},
         ])
         self.assertEqual(labels(day)[-1], (50, 60, "work", "learned"))
+
+    def test_usage_is_one_total_per_app_and_site(self):
+        chrome = "com.google.Chrome"
+        day = label_day(
+            [app(0, 10, "Google Chrome", chrome), app(10, 15, "Preview"), app(20, 30, "Google Chrome", chrome)],
+            # the second page has no length, and is left out
+            [page(2, 5, "a.edu"), page(5, 5, "b.edu"), page(22, 30, "a.edu")],
+        )
+        # the browser's own row is only the time not under one of its pages
+        self.assertEqual(day["usage"], [
+            {"name": "a.edu", "site": True, "seconds": 11 * MIN},
+            {"name": "Google Chrome", "site": False, "seconds": 9 * MIN},
+            {"name": "Preview", "site": False, "seconds": 5 * MIN},
+        ])
+        # so every minute in front is counted once
+        self.assertEqual(sum(u["seconds"] for u in day["usage"]), 25 * MIN)
+        # a day with nothing noted
+        self.assertEqual(label_day([], []), {"spans": [], "totals": {}, "unknown": [], "usage": []})
 
     def test_music_never_changes_the_mode(self):
         spotify = app(0, 1, "Spotify", "com.spotify.client")
