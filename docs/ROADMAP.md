@@ -135,7 +135,7 @@ Phases 1 to 3 are built and in daily use. On 2026-10-11 the plan changed: the kn
 
 **Gate:** dropped on 2026-10-11, and the test day with it. The "Stretches" list it was to be judged from goes away in Phase 4.
 
-## Phase 4 · Recap (built, not yet reinstalled)
+## Phase 4 · Recap (built and installed 2026-10-11)
 
 **Builds:** the recap in the Wrap up view, for today or any earlier day, and two tidy-ups. Nothing new is recorded: every number comes from the focus blocks and spans already stored.
 
@@ -160,7 +160,7 @@ Phases 1 to 3 are built and in daily use. On 2026-10-11 the plan changed: the kn
 - [x] "What the pet has learned" as a folding section with a count
 - [ ] Look at all of it in the running dev app: today, an earlier day, a day with nothing noted, light and dark (2026-10-11: seen only in a headless browser with made-up data, not in the real window)
 - [x] Update `CHANGELOG.md` and `KNOWN_ISSUES.md` (item 66 goes away; items 2, 55 and the unencrypted database stay open)
-- [ ] Rebuild and reinstall the everyday app when asked, backing up `pet.db` first (`KNOWN_ISSUES.md`, item 34). Until then the installed app keeps the old Wrap up view; it is not broken by this phase, since `backend/` only gained keys.
+- [x] Rebuild and reinstall the everyday app when asked, backing up `pet.db` first (`KNOWN_ISSUES.md`, item 34): done 2026-10-11 at 14:15, signed, with the backup `pet.db.bak-2026-10-11-1415`. It started, and its focus blocks and tasks were still there. The new Wrap up has not been looked at in it yet.
 
 **Accepted limits:** an answer given today relabels earlier days; days before 2026-10-07 have focus hours and an empty recap; a name worked out from an address can be clumsy.
 
