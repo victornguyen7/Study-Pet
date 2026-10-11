@@ -25,12 +25,13 @@ Reviewed 2026-10-07. Item numbers refer to the lists below.
 - Items 61 and 67: the short category list and the focus-block-only keeper are the two most likely to make the test day's labels or nudges wrong.
 - The fixed hide shortcut (see "Older items") matters once the look-away shortcut is added. No content security policy can wait: nothing in `src/` or `extension/` builds HTML from text.
 
-**Before Phase 4 (capture)**
-- Items 2 and 55 and the unencrypted database: all end with the SQLCipher task, which comes first in that phase.
-- Item 13: bundling Python gets harder with each package added.
+**Since the plan was cut down on 2026-10-11** (`DECISIONS.md`, "The plan was cut down")
+- The capture phase is dropped, so SQLCipher is "maybe later". Items 2 and 55 and the unencrypted database stay open with no date.
+- Item 66 (only today can be shown) goes away with the recap of Phase 4. Items that speak of "the gate" or "the test day" are history: the gates were dropped.
+- Item 13: bundling Python is "maybe later"; no new package is planned.
 - Item 34: keep backing up before every reinstall.
 
-**Before Phase 6 (more sources)**
+**If more task sources are ever added (maybe later)**
 - Items 20 and 21: event rows are not stable, and disconnecting leaves tasks behind.
 - Items 37 and 38: the gate for that phase is duplicate merging.
 - Items 10 and 19: edits to imported tasks, and hidden tasks.

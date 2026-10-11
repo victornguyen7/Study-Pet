@@ -1,12 +1,12 @@
 # Architecture
 
-This page has two halves: what is built today (Phases 1 and 2, and the first half of Phase 3), and the full system the spec describes, in the order it gets built. Why each choice was made is in `DECISIONS.md`; what is fragile or unfinished is in `KNOWN_ISSUES.md`.
+This page has two halves: what is built today, and the full system the spec describes, in the order it was built. Why each choice was made is in `DECISIONS.md`; what is fragile or unfinished is in `KNOWN_ISSUES.md`.
 
 ## The idea in one paragraph
 
 Study Pet is three layers. The **UI** (two small web pages) only draws what it is told. The **Rust core** owns everything that must be held or stored: the windows, the database, the clock tick. The **Python sidecar** holds the rules: given some input, it returns an answer and remembers nothing on disk. Every later phase adds parts to this same shape. The first such part is built: the **task fetcher**, a second Python process that is the only thing allowed on the network.
 
-## Today: Phases 1 and 2, and the first half of Phase 3
+## Today: Phases 1 to 3
 
 ```mermaid
 flowchart LR
@@ -169,25 +169,27 @@ The pet is set in `tauri.conf.json` to show on every Space, so it follows the us
 
 ## The full system
 
+The plan changed on 2026-10-11: the capture worker, the encrypted store and the wrap-up builders (timelapse and knowledge graph) were dropped. What follows is the whole system as it will stay; the only part not built yet is the recap.
+
 ```mermaid
 flowchart TD
-    WM["Window monitor<br/>front app, title, URL every 5 s<br/>+ browser extension"] --> PG["Privacy gate<br/>Private: stop here<br/>Neutral: time only"]
-    PG --> MC["Mode classifier<br/>Study · Work · Relax<br/>rules + corrections"]
+    WM["Window monitor<br/>front app every 5 s<br/>+ browser extension: page in front"] --> PG["Privacy gate<br/>Private: time only, no name"]
+    PG --> ST[("Store<br/>SQLite: spans, sessions, tasks")]
+    PG --> MC["Mode classifier<br/>Study · Work · Relax<br/>rules + the user's answers"]
     MC --> FK["Focus keeper<br/>drift rules, ladder<br/>rules only, low CPU"]
-    MC -->|Study tier only| CW["Capture worker<br/>text, OCR, frames"]
-    CW --> ST[("Encrypted store<br/>SQLite + vectors<br/>frames, tasks")]
-    ST --> WB["Wrap-up builders<br/>local model: graph<br/>ffmpeg: timelapse"]
-    TF["Task fetcher — only network access, read-only<br/>Canvas, calendar, notes, email"] -.-> TS["Task service<br/>merge, dedupe, Today<br/>reminders at breaks"]
-    TS --> PET["Pet window<br/>Today list · nudges · wrap-up screen · settings"]
+    ST --> RC["Recap<br/>heatmap, hours per mode,<br/>time per app and site"]
+    MC --> RC
+    TF["Task fetcher — only network access, read-only<br/>Canvas, calendar"] -.-> TS["Task service<br/>merge, Today, reminders"]
+    TS --> PET["Pet window and panel<br/>Today list · nudges · Wrap up · Settings"]
     FK --> PET
-    WB --> PET
+    RC --> PET
     style PG stroke-width:3px
     style TF stroke-dasharray: 5 5
 ```
 
 Read it as two separate paths that only meet at the pet window:
 
-- **The watching path** (top to bottom): what is on screen, is it allowed, what kind of activity is it, then nudge or capture.
+- **The watching path** (top to bottom): what is in front, is it allowed, what kind of activity is it, then nudge, and later recap.
 - **The task path** (dashed): fetch tasks from other apps, merge them, show Today.
 
 ### The parts, in build order
@@ -196,31 +198,28 @@ Read it as two separate paths that only meet at the pet window:
 | --- | --- | --- | --- | --- |
 | Pet window and panel | 1 | Shows everything; the only thing the user sees | UI | Tauri, TypeScript |
 | Timer and streak | 1 | Sessions, breaks, daily goal | Python | Standard library |
-| Task service | 2 | The pet's own list; merges and dedupes imports; builds Today | Rust + Python | SQLite |
-| Task fetcher | 2, 6 | Reads Canvas, calendars, notes and email. Canvas and calendar ICS feeds are built | Its own process | `icalendar`, read-only APIs |
-| Window monitor | 3 | Reads the front app, title and URL every 5 s. The app's name and the page's address and title are built; the window title is not read yet | Rust + browser extension | NSWorkspace, Accessibility API |
-| Privacy gate | 3 | Stops Private windows before anything else sees them. Built for apps and sites; not for private windows inside an ordinary app | Rust | A built-in list, and rules in the `app_rule` table |
-| Mode classifier | 3 | Labels time as Study, Work, Relax or Private. Built | Python | Rules, no model |
-| Focus keeper | 3 | Notices drift and escalates gently. Not built | Python | Rules, no model |
-| Capture worker | 4 | Saves text and low-res frames from Study windows | Rust + Python | ScreenCaptureKit, PyMuPDF, OCR |
-| Encrypted store | 4 | The same database, now encrypted | Rust | SQLCipher, sqlite-vec |
-| Wrap-up builders | 4, 5 | Timelapse, then the knowledge graph | Its own Python process | ffmpeg, Ollama or llama.cpp |
+| Task service | 2 | The pet's own list; merges imports; builds Today | Rust + Python | SQLite |
+| Task fetcher | 2 | Reads Canvas and calendar feeds | Its own process | `icalendar`, read-only APIs |
+| Window monitor | 3 | Notes the front app every 5 s, and the address and title of an allowed page. The window title is not read | Rust + browser extension | NSWorkspace, Accessibility API |
+| Privacy gate | 3 | Stops Private apps, sites and windows from being named | Rust | A built-in list, and rules in the `app_rule` table |
+| Mode classifier | 3 | Labels time as Study, Work, Relax or Private | Python | Rules, no model |
+| Focus keeper | 3 | Notices drift inside a focus block and escalates gently | Python | Rules, no model |
+| Recap | 4, not built | Heatmap, hours per mode and time per app and site, for any day (R-1 to R-5 in `spec.md`) | Rust + Python + UI | What is already stored |
 
 Each part plugs into the Phase 1 shape: things that watch or store go in Rust, things that decide go in Python, and the windows only draw.
 
 ### Processes
 
-By the end there are four processes, split by what each is allowed to do. The first, second and fourth exist today. Chrome also starts the extension's host script, which only passes bytes to the app's socket and ends when the app quits:
+There are three processes, split by what each is allowed to do. Chrome also starts the extension's host script, which only passes bytes to the app's socket and ends when the app quits:
 
 | Process | Network | Runs |
 | --- | --- | --- |
 | Tauri app (Rust core + UI) | No | Always |
 | Python sidecar (rules) | No | Always |
-| Wrap-up builder (graph, timelapse) | No | Once a day |
 | Task fetcher | Yes, read-only, HTTPS only | At launch, every half hour, and on request; it exits after each run |
 
 ### Three rules that must always hold
 
-1. **The privacy gate runs first.** A Private window is never captured, rather than captured and then deleted (PR-1).
-2. **Only the task fetcher touches the network.** Captured data never leaves the laptop (PR-6). The fetcher is handed feed addresses, uploaded files and, for a signed-in Google account, the client and refresh token, and nothing else; it has no access to the database or the Keychain.
-3. **Real-time work uses rules only.** The model runs once, at wrap-up, so the pet stays light all day.
+1. **The privacy gate runs first.** A Private window is never named, rather than named and then deleted (PR-1).
+2. **Only the task fetcher touches the network.** What the pet notes never leaves the laptop (PR-6). The fetcher is handed feed addresses, uploaded files and, for a signed-in Google account, the client and refresh token, and nothing else; it has no access to the database or the Keychain.
+3. **Everything runs on rules.** There is no model, so the pet stays light all day.

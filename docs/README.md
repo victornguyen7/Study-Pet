@@ -1,8 +1,8 @@
 # Study Pet
 
-A desktop pet that keeps a student focused. It runs locally on a laptop: a small always-on-top pet that follows you across desktops, a focus timer with breaks and a sound when each one starts and ends, and a forgiving streak, and a daily to-do list that imports from Canvas and a calendar. Focus nudges are being built now; later phases add an end-of-day knowledge graph.
+A desktop pet that keeps a student focused. It runs locally on a laptop: a small always-on-top pet that follows you across desktops, a focus timer with breaks and a sound when each one starts and ends, a forgiving streak, a daily to-do list that imports from Canvas and a calendar, and gentle nudges when you drift during a focus block.
 
-Phase 1 (pet, timer, streak) is built, and so are the Phase 2 features (daily list): you can add, check off and delete your own tasks, import assignments from Canvas and events from a calendar, and the pet reminds you when a task is due soon. Phase 3 (focus keeper and modes) is in progress: the app notes which app is in front and, through a Chrome extension, which allowed page, and labels the time Study, Work, Relax or Private. Nothing nudges yet. macOS first.
+Phases 1 to 3 are built and in daily use: the pet, timer and streak; the daily list with its imports and reminders; and the focus keeper, which notes which app is in front and, through a Chrome extension, which allowed page, and labels the time Study, Work, Relax or Private. Next is a recap in the Wrap up view: a focus heatmap and, for any day, the hours per mode and the time per app and site. The knowledge graph and timelapse of the first spec were dropped on 2026-10-11. macOS only.
 
 ## Setup
 
@@ -37,7 +37,7 @@ Run the last command from the project root.
 ## Docs
 
 - [spec.md](spec.md): what the product does.
-- [ROADMAP.md](ROADMAP.md): the phases and their tasks.
+- [ROADMAP.md](ROADMAP.md): what is built, what is next, and what was dropped.
 - [ARCHITECTURE.md](ARCHITECTURE.md): how the parts connect.
 - [DECISIONS.md](DECISIONS.md): why it is built this way.
 - [KNOWN_ISSUES.md](KNOWN_ISSUES.md): what is unfinished or fragile, and what it costs.

@@ -1,26 +1,32 @@
 # Study Pet — Product Spec
 
-Oct 1, 2026 · @vic
+Oct 11, 2026 · @vic
 
 ## Overview
 
-Study Pet is a desktop pet that runs locally on a laptop. It keeps a student focused, merges every to-do source into one daily list, and turns each day's study into a growing knowledge graph.
+Study Pet is a desktop pet that runs locally on a laptop. It keeps a student focused, merges every to-do source into one daily list, and shows where each day went.
 
 **Goals**
 
-- Show what was learned each day, across many short sessions, as a graph that links to earlier days.
 - Keep focus during study without shaming the user.
 - Replace scattered task apps with one daily list.
 - Tell study, work and relaxing time apart automatically.
-- Keep every captured byte on the laptop.
+- Show where the day went: hours of focus, hours per mode, and time per app and site.
+- Stay simple. A new feature is added only when daily use asks for it.
+- Keep everything the pet notes on the laptop.
 
-**Non-goals for v1**
+**Non-goals**
 
+- No knowledge graph, timelapse or reading of what is on screen. The pet keeps names and times, never content (dropped on 2026-10-11; see "What changed").
 - No cloud sync, accounts or multiple devices.
 - No social features or shared streaks.
 - No write-back to Canvas, calendars or notes apps.
 - No webcam, microphone or keystroke logging.
 - No mobile app.
+
+**What changed on 2026-10-11**
+
+The end-of-day knowledge graph, the timelapse and the content capture that fed them were removed: they did not fit how the pet is used day to day. The more-sources phase and database encryption moved to "Maybe later". The recap views in "Wrap up and recap" were added. Requirement IDs are not reused: C-5 to C-8, G-1 to G-5, PR-5, PR-7 and PR-12 are gone.
 
 ## Target user and problems
 
@@ -28,11 +34,11 @@ The first user is a university student who studies in short, scattered sessions 
 
 | Problem | What happens today | What the pet does |
 | --- | --- | --- |
-| Can't say what was learned today | Material is spread across tabs, PDFs and lectures | Builds an end-of-day knowledge graph linked to sources |
 | Tasks live in four or more places | Canvas, calendar, professor emails, notes apps | Merges them into one read-only daily list |
 | Drift into doomscrolling | Blockers feel punishing and get switched off | Nudges with humor and rewards coming back |
 | Study, work and rest blur together | No record of where the day went | Labels time automatically and shows the day's balance |
-| Motivation fades | Streak apps reset after one missed day | Uses forgiving streaks and a pet that grows |
+| Can't say where the day went | Time is spread across apps and tabs | One total per app and site, for any day |
+| Motivation fades | Streak apps reset after one missed day | Uses forgiving streaks, a focus heatmap and a pet that grows |
 
 ## A day with the pet
 
@@ -40,157 +46,123 @@ A typical day touches every feature once.
 
 1. **Morning:** the pet shows Today. It lists classes from the calendar, a Canvas assignment due Friday, a task added last night and one leftover.
 2. **First session:** the user picks "STAT 310 HW3," sets 50 minutes, and the pet opens its eyes.
-3. **Studying:** a PDF and two web pages count as studied. Spotify plays in the background, so the pet wears headphones.
-4. **Drift:** the user opens Reels. The pet glances, then speaks, then sits on the window. The user comes back and the pet perks up.
-5. **Break:** capture pauses and queued reminders appear. The pet says to stand up, then calls the user back when the break ends.
-6. **Afternoon:** a 30-minute session between classes, then an hour of internship applications logged as Work.
+3. **Studying:** Spotify plays in the background, so the pet wears headphones.
+4. **Drift:** the user opens Reels. The pet glances, then speaks, then sits in the middle of the screen. The user comes back and the pet perks up.
+5. **Break:** noting pauses. The pet says to stand up, then calls the user back when the break ends.
+6. **Afternoon:** a 30-minute session between classes, then an hour of internship applications labeled Work.
 7. **Evening:** a show plays. The pet lies down and stays quiet.
-8. **Wrap-up:** the user taps "wrap up my day." The pet shows the knowledge graph, a 30-second timelapse, the day's time balance and the streak.
+8. **Wrap-up:** the user opens Wrap up. It shows the focus heatmap, the day's hours of Study, Work and Relax, the time in each app and site, and the streak. A click on yesterday in the heatmap shows yesterday instead.
 
 ## Pet, sessions and breaks
 
-The pet is an always-on-top character whose eyes always show whether it is watching. Its states are Idle, Watching, Break, Relaxing, Headphones, Nudging, Happy and Sleeping.
+The pet is an always-on-top character whose eyes always show whether it is watching. Its states are Idle, Watching, Break, Relaxing, Headphones, Nudging and Happy.
 
-| ID | Requirement | Phase |
+| ID | Requirement | Status |
 | --- | --- | --- |
-| P-1 | The pet lives in a transparent, always-on-top window. The user can drag it anywhere and hide it with one shortcut. | 1 |
-| P-2 | Eyes are open only while capture is active, and closed in every other state. | 1 |
-| P-3 | Clicking the pet opens a panel: Today list, start session, wrap up day, settings. | 1 |
-| P-4 | Optional, for a later build: the user can type quick commands, such as "start 50 minutes" or "I'm relaxing." Voice comes later. Where they are typed and which commands exist is not decided. | Later |
-| S-1 | The user sets focus and break length per session, with saved presets such as 25/5 and 50/10. | 1 |
-| S-2 | A session can be tied to a task from the list, or left untagged. | 2 |
-| S-3 | Breaks pause capture and nudges automatically. | 1 |
-| S-4 | When a break ends, the pet calls the user back, and repeats once after 2 minutes. | 1 |
-| S-5 | After 3 skipped breaks in a row, the pet suggests a real break. | 1 |
-| S-6 | Sessions of any length count toward the day. There is no per-session minimum. | 1 |
-| S-7 | If study is detected with no session running, the pet offers to start one. | 3 |
+| P-1 | The pet lives in a transparent, always-on-top window. The user can drag it anywhere and hide it with one shortcut. | Built |
+| P-2 | Eyes are open only while a focus block runs and the pet is watching, and closed in every other state. | Built |
+| P-3 | Clicking the pet opens a panel: Today list, start session, wrap up, settings. | Built |
+| P-4 | The user can type quick commands, such as "start 50 minutes" or "I'm relaxing." | Maybe later |
+| S-1 | The user sets focus and break length per session, with saved presets such as 25/5 and 50/10. | Built |
+| S-2 | A session can be tied to a task from the list, or left untagged. | Built |
+| S-3 | Breaks pause noting and nudges automatically. | Built |
+| S-4 | When a break ends, the pet calls the user back, and repeats once after 2 minutes. | Built |
+| S-5 | After 3 skipped breaks in a row, the pet suggests a real break. | Built |
+| S-6 | Sessions of any length count toward the day. There is no per-session minimum. | Built |
+| S-7 | If study is detected with no session running, the pet offers to start one. | Built |
 
 ## Activity modes and background audio
 
-Every stretch of time gets one label: Study, Work, Relax or Private. The label is judged by the window in front, never by what is playing.
+Every stretch of time gets one label: Study, Work, Relax or Private. The label is judged by the app or site in front, never by what is playing.
 
 **Detection signals, strongest first**
 
-1. The user's own declaration, such as "I'm relaxing." This always wins.
-2. A learned rule for this app, site or document from an earlier correction.
-3. The app or domain category. Canvas means Study; Steam means Relax.
-4. On-screen content for ambiguous apps. A YouTube lecture differs from a vlog; lecture notes differ from a cover letter.
-5. Context: a running session, a tagged task or a calendar class.
+1. The user's own declaration, such as "Right now I'm relaxing." This always wins.
+2. A learned rule for this app or site from an earlier answer.
+3. The app or site category. Canvas means Study; Steam means Relax.
+4. Context: a running focus block.
 
 **Labeling rules**
 
 - A label changes only after about 3 minutes of sustained activity. Short detours keep the current label.
 - When unsure, the pet asks once and remembers the answer.
-- Private apps are labeled by app name only. Their content is never read.
+- Private apps and sites are counted as "Private" time, without their names.
 
 |  | Study | Work | Relax | Private |
 | --- | --- | --- | --- | --- |
 | Pet behavior | Focused, watching | Busy, supportive | Lies down, quiet | Eyes closed |
-| Focus keeper | On | On | Off | Off |
-| Content recorded | Text and frames, allowed apps only | Time and page titles | Time only | Time only |
-| Knowledge graph | Yes | No | No | No |
-| Timelapse | Yes | Optional | No | No |
-| Counts toward streak | Yes | No by default | No | No |
-
-Work has its own log instead of the graph, such as "applied to 3 internships, 1 h 20 min."
+| Focus keeper (inside a focus block) | On | On | Off | Off |
+| What is kept | Name and time | Name and time | Name and time | Time only |
+| Counts toward streak | Focus blocks only | Focus blocks only | No | No |
 
 **Background audio**
 
-- Music apps such as Spotify, Apple Music and SoundCloud are tagged background-only. They never change the mode.
-- A YouTube tab behind the front window counts as background audio.
-- Bringing the music tab forward for under 60 seconds, for example to skip a song, is a grace period.
-- Listening becomes drift when the tab stays in front past 60 seconds, or the user opens recommendations, comments or Shorts.
-- Saved study playlists launch from the pet straight to the playlist, so the user never lands on the YouTube homepage.
-- The pet logs only that audio was on, never titles. It wears headphones while music plays.
+- Music apps and sites such as Spotify, Apple Music, SoundCloud and YouTube Music are background-only. They never change the mode and the pet never asks about them.
+- In front during a focus block, a music app or site has a 60-second grace period, for example to skip a song. After that it counts as drift.
+- The pet logs only that sound was on, never what was playing. It wears headphones while sound plays.
 
-## Capture and recording
+## What the pet notes
 
-The pet checks the front window every 5 seconds and stores content only from Study-tier apps the user allowed. The privacy gate runs before anything is captured.
+The pet checks the front app every 5 seconds and keeps its name and the time. For a page in Chrome the user said yes to, the extension also sends the page's address and title. Nothing on screen is ever read or stored.
 
-| ID | Requirement | Phase |
+| ID | Requirement | Status |
 | --- | --- | --- |
-| C-1 | Every 5 s, read the front app and window title, plus the URL from the browser extension. | 3 |
-| C-2 | The privacy gate checks the tier first. A Private window is never captured. | 3 |
-| C-3 | Neutral tier: log the app name and duration only. | 3 |
-| C-4 | Capture pauses during breaks, in Relax mode, and when the pet is told to look away. | 3 |
-| C-5 | Study tier: extract text (web page text, PDF text, OCR as a fallback) and save a low-res frame for the timelapse. | 4 |
-| C-6 | A page counts as studied after 60 s of focus. Shorter visits are dropped. | 4 |
-| C-7 | Text is saved only when content changes, checked by hash, so a long PDF isn't stored over and over. | 4 |
-| C-8 | Email addresses and phone numbers are redacted before text is saved. Chat apps are never Study tier by default. | 4 |
+| C-1 | Every 5 s, note the front app, plus the page in front from the browser extension. The window title is not read. | Built |
+| C-2 | The privacy gate runs first. A Private app, site or window is counted as "Private" time with no name. | Built |
+| C-3 | An app or site nobody has answered for is noted by name and time only, and asked about once. | Built |
+| C-4 | Noting pauses during breaks, when the pet is told to look away, and after 5 minutes with nobody at the keyboard. | Built |
 
-## End-of-day knowledge graph
+## Wrap up and recap
 
-At wrap-up, a local model turns the day's study text into concepts and links them to each other and to earlier days. The graph is built once a day, not per session, so short sessions still add up.
+The Wrap up view answers "where did the day go?" for today or any earlier day. Everything in it is worked out from what the pet already notes; nothing new is recorded.
 
-**How a wrap-up runs**
-
-1. The user taps "wrap up my day," or a set time arrives (default 10 pm).
-2. All Study text captured today is collected, grouped by source.
-3. The model extracts 5 to 15 key concepts per source.
-4. Concepts that match ones already in the graph, by name or close meaning, are merged.
-5. Edges are added between concepts from the same source, plus relations the model finds, such as "backprop uses the chain rule."
-6. Each concept is linked to its sources, timestamps and tagged task.
-
-**The wrap-up screen shows**
-
-- The graph, with today's new concepts highlighted and linked to older ones.
-- A 3 to 5 sentence summary of what was studied.
-- The day's time balance across Study, Work, Relax and Private.
-- Time spent per task, against the estimate.
-- The timelapse and the streak.
-
-| ID | Requirement | Phase |
+| ID | Requirement | Status |
 | --- | --- | --- |
-| G-1 | Clicking a concept lists its sources. Clicking a source reopens the page or file. | 5 |
-| G-2 | The user can rename, merge or delete concepts, and edits persist. | 5 |
-| G-3 | The graph can be browsed by day, course and task. | 5 |
-| G-4 | Graph building runs offline once a day and may take several minutes. | 5 |
-| G-5 | The pet's habitat grows visibly as the graph grows. | 5 |
+| R-1 | **Focus heatmap.** A grid of days covering about the last four months, each day shaded by its hours of focus: none, under 1 h, 1 to 2 h, 2 to 4 h, 4 h or more. Hovering a day shows its date and hours. It replaces the "Last 7 days" strip. | Next |
+| R-2 | **Any day.** Clicking a day in the heatmap shows that day's recap (R-3 and R-4) in place of today's. Today is shown when the view opens, and one click goes back to it. | Next |
+| R-3 | **Recap by mode.** One bar split into Study, Work, Relax, Private and unknown time, with the hours of each beside it. | Next |
+| R-4 | **One list of apps and sites.** A single total per app and per site for the day, longest first. The browser's own row counts only the time not already listed under a site, so no time is counted twice. The list of stretches with times of day is removed. | Next |
+| R-5 | **Names, not addresses.** A site is shown by name everywhere in the panel and in the pet's questions: "YouTube", never `www.youtube.com`. A built-in list names common sites; any other site gets a name worked out from its address (`canvas.auckland.ac.nz` becomes "Canvas"). Apps are shown by the name the Dock shows. | Next |
+| R-6 | **A folding "What the pet has learned".** The section in Settings is closed by default and shows how many answers it holds; a click opens and closes it. | Next |
 
-## Timelapse and streaks
+**Limits that are accepted**
 
-The timelapse is a 30-second video of the day's Study windows. The streak counts days with at least 25 minutes of Study time.
+- Labels are worked out when a day is shown, with the rules as they are now. An answer given today also relabels earlier days.
+- Apps and sites have been noted since 2026-10-07, so an earlier day has focus hours in the heatmap and an empty recap.
+- A site the user said no to in the extension is not noted, so its time shows under the browser's own row.
+- A name worked out from an address can be clumsy for an obscure site. The fix is to add that site to the built-in list.
 
-**Timelapse**
+## Streaks
 
-- One low-res frame every 10 s, from Study windows only.
-- Private and Neutral windows are skipped or shown as a blurred placeholder tile.
-- Built at wrap-up. Raw frames are deleted once the video is rendered.
-- Videos are kept 30 days by default, adjustable in settings.
+The streak counts days with at least 25 minutes of focus.
 
-**Streaks**
-
-- A day counts at 25 minutes of Study time or more. The threshold is adjustable.
+- A day counts at 25 minutes of focus or more. The threshold is adjustable.
 - Two streak freezes a month protect against one bad day.
-- Work time does not count by default (see open decisions).
 - The pet changes at streak milestones: 7, 30 and 100 days.
 
 ## Focus keeper
 
-During Study and Work time, the pet notices drift and escalates gently. It never shames the user, and it goes silent in Relax mode.
+Inside a focus block, the pet notices drift and escalates gently. It never shames the user, and it is silent outside a block and in Relax mode.
 
 **What counts as drift**
 
-- A denylisted app or site in front during Study or Work, after a 30-second grace period.
-- Feed patterns: Shorts, Reels, homepage feeds and endless scrolling.
-- A music tab left in front past its 60-second grace period.
-- Lecture content on YouTube is not drift.
-- Unknown apps are classified once, and the user confirms.
+- A Relax app or site in front, by the built-in list or by the user's answer, after a 30-second grace period.
+- YouTube's home page, feeds and Shorts. A YouTube video is not drift.
+- A music app or site left in front past its 60-second grace period.
+- Unknown apps are asked about once, and the user's answer decides.
 
 | Step | After | What the pet does |
 | --- | --- | --- |
 | 1 | 30 s of drift | Glances at the user |
-| 2 | 2 min | Speech bubble with a fact: "Your graph hasn't grown since 2:15." |
-| 3 | 5 min | Walks onto the distracting window and sits on it |
-| 4 | 10 min, opt-in only | Blocks the site for 5 minutes |
+| 2 | 2 min | Speech bubble about the time, the site or the task |
+| 3 | 5 min | Moves to the middle of the screen and sits there |
+| 4 | 10 min, opt-in only | Blocks the site for 5 minutes (Chrome only) |
 
 **Tone rules**
 
 - The user picks a personality: Gentle, Sassy or Roast.
-- Lines mention time, the task or the graph. They never comment on the user's worth, intelligence or appearance.
+- Lines mention time, the site or the task. They never comment on the user's worth, intelligence or appearance.
 - Coming back is always rewarded: the pet celebrates the return.
-- After 4 hours of study, the pet suggests relaxing.
-- An optional relax limit ("check on me after 2 hours") is off by default.
 
 ## Daily to-do list and integrations
 
@@ -202,190 +174,154 @@ The pet owns one to-do list. Other apps are read-only feeds, and nothing is ever
 - Each task has a title, course, due date, estimate, sources and status.
 - There are only two views: Today and All.
 
-**The Today list**, built each morning at 7 am or first wake, holds:
+**The Today list** holds:
 
 - Anything due today, and anything overdue.
 - Tasks due soon compared with their estimate.
 - Tasks the user added for today, and unfinished ones from yesterday.
 - Calendar events, shown as a timeline without checkboxes.
 
-| Source | How it is read | Phase |
+| Source | How it is read | Status |
 | --- | --- | --- |
-| The pet's own tasks | Native | 2 |
-| Canvas | Calendar feed (ICS). No API token: the school does not give students one, so submission status is not read; the pet asks instead (see the sync rules) | 2 |
-| Google Calendar or Outlook | OAuth, read-only. Until that is built: the calendar's secret iCal address, or an exported .ics file uploaded by hand | 2 |
-| Obsidian | Local markdown files | 6 |
-| Notion, Todoist, Apple Reminders | Read-only API | 6 |
-| Email | Chosen senders only; a local model extracts deadlines; the email itself is not stored | 6 |
+| The pet's own tasks | Native | Built |
+| Canvas | Calendar feed (ICS). No API token: the school does not give students one, so submission status is not read; the pet asks instead (see the sync rules) | Built |
+| Google Calendar | Read-only sign-in (OAuth), the calendar's secret iCal address, or an exported .ics file uploaded by hand | Built |
+| Obsidian, Notion, Todoist, Apple Reminders, email | Not planned | Maybe later |
 
-**Sync rules** (which of these are built, and where the build falls short, is in `KNOWN_ISSUES.md`)
+**Sync rules** (where the build falls short is in `KNOWN_ISSUES.md`)
 
 - Every imported item keeps a stable source ID, so a re-sync never brings back a checked task.
 - A source edit, such as a new due date, updates the pet's copy and keeps its done status.
 - An item deleted at the source is flagged "removed from Canvas" instead of vanishing.
-- If the source shows the item complete, the pet checks it off. No current source does: the Canvas feed carries no submission status. So for a Canvas task the pet asks, once after its due time and never during a focus block ("Did you submit it?") and when a focus block tied to it ends ("Finished it?"); a yes checks it off, and it can always be checked off by hand.
-- Duplicates merge on course, fuzzy title and due date. The merged task shows a badge per source.
-- The user chooses which calendars, courses, lists or tags to import.
+- The Canvas feed carries no submission status. So for a Canvas task the pet asks, once after its due time and never during a focus block ("Did you submit it?") and when a focus block tied to it ends ("Finished it?"); a yes checks it off, and it can always be checked off by hand.
+- A typed task and its imported copy merge when the user confirms the pet's suggestion.
+- The user chooses which courses to show.
 
 **Reminders**
 
 - Timed by due date against the estimate, not by fixed alarms.
-- Held until the next break, unless the task is due within 2 hours. (Built so far: a reminder waits for a running focus block to end; the 2-hour exception and the queue for the break are not built.)
-- A morning brief lists classes, what is due soon and suggested study blocks in calendar gaps.
-- Over time, the pet compares estimates with actual time per kind of task.
+- A reminder waits for a running focus block to end.
 
 ## Privacy and security
 
-Captured data never leaves the laptop. The only network traffic is read-only task fetching, and Private apps are never captured at all.
+What the pet notes never leaves the laptop. The only network traffic is read-only task fetching, and Private apps are never named.
 
 | Tier | What the pet keeps | Default for |
 | --- | --- | --- |
-| Study | Text, low-res frames, time | Apps and sites the user allows |
-| Neutral | App name and time only | Any new app or site until the user decides |
-| Private | Only "private time, N minutes" | Password managers, banking, messaging, email clients, incognito windows, any screen with a password field |
+| Noted | App name and time; for an allowed page, its address, title and time | Apps in front, and sites the user said yes to |
+| Private | Only "private time, N minutes" | Password managers, banking, messaging, email clients, incognito windows, any screen with a password field, and anything the user marks Private |
 
 | ID | Requirement |
 | --- | --- |
-| PR-1 | The gate runs before capture. A Private window is never screenshotted, rather than captured and then deleted. |
-| PR-2 | The first time an app or site appears, the pet asks "Can I look at this?" and saves the answer. |
+| PR-1 | The gate runs before anything is stored. A Private window is never named, rather than named and then deleted. |
+| PR-2 | The first time a site appears, the extension asks "Can I look at this?" and saves the answer. An app or site the pet cannot place is asked about once. |
 | PR-3 | Eyes open means watching. One global shortcut makes the pet look away for 15 minutes. |
-| PR-4 | All stored data is encrypted at rest. Tokens live in the OS keychain. |
-| PR-5 | Raw frames are deleted after the timelapse. Text and the graph stay until the user deletes them; retention is adjustable. |
-| PR-6 | The task fetcher is a separate process with network access. The capture and graph processes have none. |
-| PR-7 | Integrations use read-only scopes. Email reads chosen senders only and stores only extracted tasks. |
-| PR-8 | A data panel shows everything stored by day and source, with delete per item, per day, or all. |
-| PR-9 | Each source shows its last sync and a "disconnect and delete" button. |
-| PR-10 | Onboarding explains each OS permission, such as screen recording and accessibility, before asking for it. |
-| PR-11 | Background music is logged as "audio on," with no titles. |
-| PR-12 | If the app is ever distributed publicly, Gmail access needs Google's restricted-scope security review. |
+| PR-4 | Tokens and feed addresses live in the OS keychain. Encrypting the database itself is "Maybe later". |
+| PR-6 | The task fetcher is a separate process and the only one with network access. |
+| PR-8 | A data panel that lists everything stored, with delete per day or all. Maybe later. |
+| PR-9 | Each source shows its last sync and a "disconnect" button. |
+| PR-10 | Settings explains each OS permission before asking for it. |
+| PR-11 | Sound is logged as on or off, never what was playing. |
 
 ## System architecture
 
 ```mermaid
 flowchart TD
-    WM["Window monitor<br/>front app, title, URL every 5 s<br/>+ browser extension"] --> PG["Privacy gate<br/>Private: stop here<br/>Neutral: time only"]
-    PG --> MC["Mode classifier<br/>Study · Work · Relax<br/>rules + corrections"]
+    WM["Window monitor<br/>front app every 5 s<br/>+ browser extension: page in front"] --> PG["Privacy gate<br/>Private: time only, no name"]
+    PG --> ST[("Store<br/>SQLite: spans, sessions, tasks")]
+    PG --> MC["Mode classifier<br/>Study · Work · Relax<br/>rules + the user's answers"]
     MC --> FK["Focus keeper<br/>drift rules, ladder<br/>rules only, low CPU"]
-    MC -->|Study tier only| CW["Capture worker<br/>text, OCR, frames"]
-    CW --> ST[("Encrypted store<br/>SQLite + vectors<br/>frames, tasks")]
-    ST --> WB["Wrap-up builders<br/>local model: graph<br/>ffmpeg: timelapse"]
-    TF["Task fetcher — only network access, read-only<br/>Canvas, calendar, notes, email"] -.-> TS["Task service<br/>merge, dedupe, Today<br/>reminders at breaks"]
-    TS --> PET["Pet window<br/>Today list · nudges · wrap-up screen · settings"]
+    ST --> RC["Recap<br/>heatmap, hours per mode,<br/>time per app and site"]
+    MC --> RC
+    TF["Task fetcher — only network access, read-only<br/>Canvas, calendar"] -.-> TS["Task service<br/>merge, Today, reminders"]
+    TS --> PET["Pet window and panel<br/>Today list · nudges · Wrap up · Settings"]
     FK --> PET
-    WB --> PET
+    RC --> PET
     style PG stroke-width:3px
     style TF stroke-dasharray: 5 5
 ```
 
-The privacy gate sits at the start of the capture path, so a Private window never reaches the capture worker. The task fetcher is the only process allowed on the network.
+The privacy gate sits at the start of the path, so a Private window is never named in the store. The task fetcher is the only process allowed on the network.
 
-| Part | First build (macOS) | Windows later |
-| --- | --- | --- |
-| Pet window | Tauri app (Rust core, web UI), transparent and always on top | Same |
-| Window monitor | NSWorkspace and the Accessibility API | UI Automation |
-| Browser data | Chrome or Edge extension: URL, page text, YouTube player state | Same |
-| Screen frames | ScreenCaptureKit | Windows Graphics Capture |
-| Text extraction | Page text from the extension, PyMuPDF for PDFs, Apple Vision OCR as a fallback | Windows OCR |
-| Store | SQLite encrypted with SQLCipher, plus a local vector index such as sqlite-vec | Same |
-| Local model | Ollama or llama.cpp with a small open model, run only at wrap-up | Same |
-| Timelapse | ffmpeg | Same |
-| Extraction and graph jobs | A Python sidecar process with no network access | Same |
+| Part | Built with (macOS) |
+| --- | --- |
+| Pet window and panel | Tauri app (Rust core, web UI), transparent and always on top |
+| Window monitor | NSWorkspace; the Accessibility API only to see whether a password field has the keyboard |
+| Browser data | Chrome extension: the address and title of an allowed page, and whether a tab is playing sound |
+| Store | SQLite |
+| Rules (timer, streak, modes, drift) | A Python sidecar process with no network access |
+| Task fetcher | A second Python process, run on a schedule |
 
 ## Data model
 
-Thirteen record types cover the whole product, all stored in one encrypted local database.
+Nine record types cover the whole product, all stored in one local database.
 
 | Record | Key fields | Notes |
 | --- | --- | --- |
-| Session | start, end, planned length, task, mode | One per focus block |
-| Activity span | start, end, app, domain, title, mode, tier, label source | Label source: declared, learned, rule or model |
-| Source | type, URL or path, title, first seen, dwell time | Web page, PDF, doc or video; Study tier only |
-| Snapshot | source, time, text, content hash | Text saved after redaction |
-| Frame | time, file path | Deleted after the timelapse |
-| Concept | name, aliases, first seen, embedding | A graph node |
-| Concept link | two concepts, relation, sources | A graph edge |
-| Concept mention | concept, source, time, task | Ties a node to where it was learned |
-| Task | title, course, due time or due date, estimate, status, done time, planned day, last reminded | Owned by the pet |
-| Task source link | task, source app, source item ID, last sync, removed flag | Drives dedupe and sync |
+| Session | start, end, planned length, break length, task | One per focus block |
+| App span | start, end, app name, bundle ID | The app in front; "Private" with no name for a Private app |
+| Activity span | start, end, site, address, title | An allowed page in front in Chrome |
+| Audio span | start, end | That sound was on, never what |
+| Mode declaration | start, end, mode | "Right now I'm relaxing" |
+| App rule | app or site, name, mode | The user's answers: Study, Work, Relax or Private |
+| Task | title, course, due time or due date, estimate, status, done time, last reminded | Owned by the pet |
+| Task source link | task, source app, source item ID, last sync, removed flag | Drives sync and merging |
 | Calendar event | source, source item ID, title, start, end, all-day flag | Not a task: no done state, never merged |
-| App rule | app or domain, tier, default mode, background-audio flag, set by | Privacy and mode rules |
-| Day summary | date, minutes per mode, streak counted, summary text, timelapse | One per wrap-up |
+
+Mode labels and recap totals are not stored. They are worked out from the spans each time a day is shown.
 
 ## Non-functional requirements
 
-The pet has to be light enough to leave open all day on battery. Real-time work uses rules only, and the model runs once at wrap-up.
+The pet has to be light enough to leave open all day on battery. Everything runs on rules; there is no model.
 
 | Area | Target |
 | --- | --- |
 | CPU while studying | Under 5% average on a recent laptop |
-| Memory | Under 300 MB, not counting the nightly model run |
-| Wrap-up time | Graph and timelapse ready within 5 minutes for a 6-hour study day |
-| Storage | Under 500 MB a month with default retention |
+| Memory | Under 300 MB |
+| Wrap up | Any day's recap shown within a second |
 | Startup | Pet visible within 3 s of login |
 | Crash recovery | At most the last minute of activity is lost |
-| Network | Zero outbound traffic from the capture and graph processes |
-| Battery | The model runs only at wrap-up, preferably on power |
+| Network | Zero outbound traffic except the task fetcher |
 
-## Roadmap and gates
+## Roadmap
 
-```mermaid
-flowchart TD
-    P1["Phase 1 · Pet core<br/>pet window, sessions and breaks, presets, streaks"] -->|"Gate: used 5 days in a row"| P2["Phase 2 · Daily list<br/>own tasks, Canvas feed, Google Calendar"]
-    P2 -->|"Gate: one week with no other to-do app opened"| P3["Phase 3 · Focus keeper and modes<br/>privacy tiers, mode labels, music rules, drift ladder"]
-    P3 -->|"Gate: 9 of 10 spans labeled right on a test day"| P4["Phase 4 · Capture and timelapse<br/>Study text, dwell and dedupe rules, nightly timelapse"]
-    P4 -->|"Gate: a one-week audit finds zero Private frames"| P5["Phase 5 · Knowledge graph<br/>nightly concepts, links across days, wrap-up screen"]
-    P5 -->|"Gate: 7 of 10 concepts judged useful on a real day"| P6["Phase 6 · More sources<br/>Obsidian, Notion, Todoist, Reminders, filtered email"]
-    SP["Graph spike, alongside Phases 1–2<br/>concept extraction on a day of saved notes"] -.->|"go / no-go"| P5
-    style P5 stroke-width:3px
-    style SP stroke-dasharray: 5 5
-```
+Phases 1 to 3 are built and in daily use. There are no more phases and no gates: the app stays as it is, and small extras are added one at a time when daily use asks for them. The task list is in `ROADMAP.md`.
 
-| Phase | Ships | Gate to move on |
+| | What | Status |
 | --- | --- | --- |
-| 1 · Pet core | Pet window, sessions and breaks, presets, streaks | Used 5 days in a row |
-| 2 · Daily list | Own tasks, quick add, Today and All views, Canvas feed, Google Calendar | One week with no other to-do app opened |
-| 3 · Focus keeper and modes | Privacy tiers, mode labels, music rules, drift ladder | 9 of 10 spans labeled right on a test day |
-| 4 · Capture and timelapse | Study text with dwell and dedupe rules, nightly timelapse | A one-week audit finds zero Private frames |
-| 5 · Knowledge graph | Nightly concepts, links across days, wrap-up screen | 7 of 10 concepts judged useful on a real day |
-| 6 · More sources | Obsidian, Notion, Todoist, Reminders, filtered email | Duplicate tasks merged correctly |
-| Graph spike (parallel to 1–2) | Concept extraction tested on saved notes | Go / no-go for Phase 5 |
-
-Phases ship in order, and each gate must pass before the next phase starts. The graph spike runs alongside Phases 1 and 2, so a noisy graph is caught before capture is built.
+| 1 · Pet core | Pet window, sessions and breaks, presets, streaks | Built |
+| 2 · Daily list | Own tasks, quick add, Today and All views, Canvas feed, Google Calendar | Built |
+| 3 · Focus keeper and modes | Privacy gate, mode labels, music rules, drift ladder | Built |
+| 4 · Recap | Heatmap, recap by mode for any day, one list of apps and sites, names for sites, folding learned section (R-1 to R-6) | Next |
+| Maybe later | Quick commands, morning brief, more task sources, database encryption, a data panel, Windows | Only if needed |
 
 ## Success metrics
 
-Success means the first user keeps the pet open every day and trusts its graph. These targets cover the first four weeks of personal use.
+Success means the first user keeps the pet open every day and trusts what it shows.
 
 | Metric | Target |
 | --- | --- |
 | Days the pet is opened | 6 of 7 |
 | Focus sessions per week | 10 or more |
 | Returns within 2 minutes of a nudge | 60% or more |
-| Wrap-ups opened | 5 of 7 days |
-| Concepts judged useful in a weekly review | 7 of 10 |
 | Activity labels correct in a spot check | 90% or more |
 | Other to-do apps opened per week | Close to zero |
-| Private frames captured | Zero, always |
+| Private apps or sites named in the store | Zero, always |
 
 ## Open decisions and risks
 
-Six decisions are still open. The biggest risk is a noisy graph, which is why it gets tested early.
-
 **Open decisions**
 
-- [ ] Platform first: this spec assumes macOS, with Windows later.
-- [ ] Should Work time count toward the streak? The default is no.
-- [ ] Do lecture videos count as study, through captions or transcripts?
-- [ ] Handwritten or iPad notes: import photos, or leave them out?
-- [ ] What should the graph unlock next: quizzes, spaced review, or both?
-- [ ] The pet's look and name.
+- [x] Platform first: macOS. Windows is "Maybe later".
+- [x] Knowledge graph and timelapse: dropped on 2026-10-11.
+- [ ] Should Work time count toward the streak? Today only focus blocks count, whatever their label.
+- [ ] The pet's name.
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
-| The graph is noisy | The product loses its hook | A graph spike on saved notes before Phase 4; users can merge and delete concepts |
-| Activities are mislabeled | Nudges during real study erode trust | 3-minute smoothing, ask once, user declarations win |
-| It feels like surveillance | The user turns it off | Visible eyes, ask-first tiers, a full data panel |
-| CPU or battery drain | The pet gets closed on battery | Rules in real time; the model only at wrap-up |
-| OS permission friction | Setup is abandoned | Plain onboarding for each permission |
+| Activities are mislabeled | Nudges during real study erode trust; the recap reads wrong | 3-minute smoothing, ask once, user declarations win |
+| It feels like surveillance | The user turns it off | Visible eyes, ask-first sites, names and times only |
+| CPU or battery drain | The pet gets closed on battery | Rules only, no model |
+| The database is not encrypted | Page addresses and titles are readable by other programs run by the user | Only allowed sites are noted; a Private answer deletes a site's pages; encryption is "Maybe later" |
 | School disables Canvas tokens (it has, as of 2026-10-05) | No submission status | The ICS feed is the baseline; the pet asks whether work was submitted |
-| Scope creep | It never ships | Phases with gates; each phase ships something usable |
+| Scope creep | The app stops being simple | No phases; one small extra at a time, only when daily use asks for it |

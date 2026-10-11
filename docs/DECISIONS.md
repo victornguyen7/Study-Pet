@@ -476,3 +476,18 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Detail, S-7:** the offer is the last smoothed stretch being Study, 5 minutes long and under a minute old, with the timer idle.
 - **Gave up:** the window title (C-1) is still not read; nothing uses it, and it is the most private thing the monitor could store. Edge, YouTube's player state, "suggest relaxing after 4 hours" and the optional relax limit are not built.
 - **Revisit when:** the hand test and the gate's test day are done; they decide which of these limits matter.
+
+## 2026-10-11 · The plan was cut down
+
+### No knowledge graph, no timelapse, no content capture
+- **Why:** decided by the first user on 2026-10-11. The graph and the timelapse did not fit the way the pet is used day to day; the timer, the list and the focus keeper do, and are to stay as they are. Capture of page text, PDFs, OCR and frames existed only to feed those two, so it goes with them.
+- **Gave up:** the first spec's hook, "what did I learn today". The graph spike was never run, so whether the graph would have been useful is not known.
+- **Also dropped:** the gates between phases, and the Phase 3 test day. From here on a feature is added only when daily use asks for it, and it has to be small.
+- **Moved to "maybe later":** more task sources, database encryption (SQLCipher) and the data panel. Encryption was to come before page text was stored; now nothing beyond names, addresses and times is. The "Revisit when: Phase 4" and "Phase 5" notes in older entries no longer have a date.
+- **Revisit when:** the recap is in use and something is still missing from it.
+
+### The recap is worked out when shown, not stored
+- **Why:** the heatmap, the hours per mode and the time per app and site (R-1 to R-4 in `spec.md`) all come from rows that are already kept: `session`, `app_span`, `activity_span`, `audio_span` and `mode_declaration`. A day of spans is small, so any day can be labeled on request by the same `label_day` that labels today.
+- **Gave up:** fixed history. An answer given today relabels earlier days, since labels use the rules as they are now.
+- **Revisit when:** showing a day gets slow, or a past day's numbers changing becomes confusing; then store a row per day.
+

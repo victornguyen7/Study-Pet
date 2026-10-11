@@ -1,18 +1,6 @@
 # Roadmap
 
-Phases ship in order, and each gate must pass before the next phase starts. Requirement IDs (P-1, C-5, ...) refer to `spec.md`. Why each tool was chosen is in `DECISIONS.md`.
-
-```mermaid
-flowchart TD
-    P1["Phase 1 · Pet core<br/>pet window, sessions and breaks, presets, streaks"] -->|"Gate: used 5 days in a row"| P2["Phase 2 · Daily list<br/>own tasks, Canvas feed, Google Calendar"]
-    P2 -->|"Gate: one week with no other to-do app opened"| P3["Phase 3 · Focus keeper and modes<br/>privacy tiers, mode labels, music rules, drift ladder"]
-    P3 -->|"Gate: 9 of 10 spans labeled right on a test day"| P4["Phase 4 · Capture and timelapse<br/>Study text, dwell and dedupe rules, nightly timelapse"]
-    P4 -->|"Gate: a one-week audit finds zero Private frames"| P5["Phase 5 · Knowledge graph<br/>nightly concepts, links across days, wrap-up screen"]
-    P5 -->|"Gate: 7 of 10 concepts judged useful on a real day"| P6["Phase 6 · More sources<br/>Obsidian, Notion, Todoist, Reminders, filtered email"]
-    SP["Graph spike, alongside Phases 1–2<br/>concept extraction on a day of saved notes"] -.->|"go / no-go"| P5
-    style P5 stroke-width:3px
-    style SP stroke-dasharray: 5 5
-```
+Phases 1 to 3 are built and in daily use. On 2026-10-11 the plan changed: the knowledge graph, the timelapse and the content capture that fed them were dropped, along with the graph spike and the gates between phases. The app stays as it is, and small extras are added one at a time. Requirement IDs (P-1, R-3, ...) refer to `spec.md`. Why each tool was chosen is in `DECISIONS.md`.
 
 ## Phase 1 · Pet core (done)
 
@@ -41,25 +29,9 @@ flowchart TD
 - [x] Wrap-up view with the last 7 days
 - [x] Use it 5 days in a row and write down what breaks -> Pet is working properly for 5 days (*note that can not code while open pet)
 
-**Gate:** used 5 days in a row.
+**Gate (passed):** used 5 days in a row.
 
-## Graph spike (alongside Phases 1–2)
-
-**Builds:** a throwaway script, not part of the app. It answers one question: are the extracted concepts useful?
-
-**Features:** none for the user. The output is a go / no-go for Phase 5.
-
-**Uses:** a Python script, Ollama or llama.cpp with a small open model, one day of saved study notes as input.
-
-**Tasks**
-- [ ] Save one real day of study text (notes, a PDF, two web pages)
-- [ ] Extract 5 to 15 concepts per source with the local model
-- [ ] Judge 10 concepts by hand: useful or noise
-- [ ] Record the result and the model used in `DECISIONS.md`
-
-**Gate:** go / no-go for Phase 5.
-
-## Phase 2 · Daily list (in progress)
+## Phase 2 · Daily list (done)
 
 **Builds:** the pet's own to-do list, the Today view, and the first two read-only feeds.
 
@@ -96,9 +68,9 @@ flowchart TD
 - [x] Merge a typed task with its imported copy (the pet suggests when the due day and course number match; the user confirms)
 - [x] Let the user choose which courses to show (checkboxes in Settings). Choosing Google calendars is left out: the primary calendar had everything
 - [x] Tie a session to a task; show time spent against the estimate. When a tied focus block ends, the panel asks "Finished it?" and a yes checks the task off (in the panel only, not yet in the pet's bubble)
-- [ ] Quick commands (optional, for a later build; skipped on 2026-10-05 and not needed to finish Phase 2. Every action they would cover is already a click or two, and "I'm relaxing" needs the modes from Phase 3)
+- Maybe later: quick commands (optional, for a later build; skipped on 2026-10-05 and not needed to finish Phase 2. Every action they would cover is already a click or two, and "I'm relaxing" needs the modes from Phase 3)
 - [x] Task reminders: the pet speaks up when the time left until a task is due falls under twice the work left (estimate less time spent; 1 hour assumed with no estimate). Once a day per task, never during a focus block, and the task's row is marked "start soon"
-- [ ] Later: hold reminders for the next break with the spec's "unless due within 2 hours" rule, and the morning brief
+- Maybe later: hold reminders for the next break with the spec's "unless due within 2 hours" rule, and the morning brief
 - [x] "Did you submit it?": once a Canvas task's due time has passed, the pet asks once (not during a focus block), and the task's row has a "Did you submit it? Yes" button that checks it off. This stands in for Canvas submission status, which needs an API token the school does not give out
 - [x] A sound when a break starts and when the pet calls you back, with a checkbox in Settings to turn it off (macOS system sounds)
 - [x] Streak section in the Today view with a pixel fire, in place of the one-line streak text
@@ -108,9 +80,9 @@ flowchart TD
 
 **Decided:** `icalendar` with `recurring-ical-events` parses ICS. OAuth uses no library: the standard library covers the sign-in, and the `security` tool reaches the Keychain.
 
-**Gate:** one week with no other to-do app opened.
+**Gate:** dropped on 2026-10-11. The list is in daily use.
 
-## Phase 3 · Focus keeper and modes (in progress)
+## Phase 3 · Focus keeper and modes (done)
 
 **Builds:** the window monitor, the privacy gate, the mode classifier and the drift ladder. Nothing on screen is stored yet, only app names and time.
 
@@ -129,7 +101,7 @@ flowchart TD
 **Tasks**
 - [x] Split `lib.rs` into modules before the monitor adds to it (no change in behavior; run the app once to confirm)
 - [x] Window monitor, front app: `monitor.rs` asks macOS for the app in front every 5 s and keeps its name, bundle ID and time in `app_span`; "Apps today" in Wrap up lists time per app. Not during a break, and not the pet itself or the lock screen (2026-10-07; the tests pass and macOS answered with the real front app, but the running app and the new list have not been looked at)
-- [ ] Window monitor, window title (C-1): not built. The Accessibility permission is used only to see whether the keyboard is in a password field (`KNOWN_ISSUES.md`, item 73)
+- Maybe later: window monitor, window title: not built. The Accessibility permission is used only to see whether the keyboard is in a password field (`KNOWN_ISSUES.md`, item 73)
 - [x] Run the app and look at "Apps today": a span per app, nothing during a break, nothing for the pet's own panel
 - [x] Browser extension that reports the URL: `extension/` for Chrome asks "can I look at this page?" on every page opened, remembering nothing, and sends the address and title of an allowed page in front every 5 s; the app keeps them in `activity_span` and lists time per site in Wrap up (2026-10-07, built ahead of the window monitor by choice; the app side was run with made-up pages, the extension itself has not been loaded in Chrome yet)
 - [x] Load the extension in Chrome and try it: the banner, the popup, a span for a real page, nothing during a break or with the app closed
@@ -155,86 +127,57 @@ flowchart TD
 - [x] Look-away shortcut (PR-3): Option-Shift-L stops all noting for 15 minutes and shuts the pet's eyes; the same keys end it early (2026-10-07; the timing is tested, the shortcut has not been pressed in the running app)
 - [x] The pet offers to start a session (S-7): with no session running, 5 minutes of Study that is still going puts "Looks like you're studying" in the bubble, at most once in half an hour (2026-10-07; the rule is tested, the bubble has not been seen)
 - [x] By hand, before the gate (everything above marked "not seen in the running app"; the list with what to expect is item 65 in `KNOWN_ISSUES.md`): reload the extension so it runs 0.5.0, rebuild the app, and go through it (gone through by hand on 2026-10-08; it looked right)
-- [ ] The gate's test day: use the laptop for a normal day, then in Wrap up judge 10 stretches of "Stretches" the same evening, since the list only ever shows today
+- Dropped 2026-10-11: the gate's test day
 
 **Decided:** the extension talks to the app by native messaging (2026-10-07, see `DECISIONS.md`).
 
 **Built, not tested:** every build task of the phase is done as of 2026-10-07, most of it checked by tests only. What was left out on purpose, and every known limit, is in `KNOWN_ISSUES.md`, items 53 to 78. Not built: the window title (C-1), an Edge extension, YouTube player state, and the spec's "suggest relaxing after 4 hours".
 
-**Gate:** 9 of 10 spans labeled right on a test day.
+**Gate:** dropped on 2026-10-11, and the test day with it. The "Stretches" list it was to be judged from goes away in Phase 4.
 
-## Phase 4 · Capture and timelapse
+## Phase 4 · Recap (next)
 
-**Builds:** the capture worker, the encrypted store and the nightly timelapse.
-
-**Features**
-- Text saved from Study-tier pages and PDFs, with OCR as a fallback (C-5).
-- A page counts as studied after 60 s of focus (C-6).
-- Text saved only when it changes, checked by hash (C-7).
-- Email addresses and phone numbers redacted before saving (C-8).
-- A 30-second timelapse of the day's Study windows; raw frames deleted after it renders (PR-5).
-- A data panel listing everything stored, with delete per item, per day, or all (PR-8).
-
-**Uses:** ScreenCaptureKit for frames, page text from the browser extension, PyMuPDF for PDFs, Apple Vision OCR, SQLCipher in place of plain SQLite (PR-4), ffmpeg, new `source`, `snapshot` and `frame` tables.
-
-**Tasks**
-- [ ] Switch the database to SQLCipher with the key in the keychain, before any text is stored
-- [ ] Extension sends page text for Study-tier sites
-- [ ] PDF text with PyMuPDF; OCR fallback
-- [ ] Dwell rule, content-hash dedupe, redaction, each with tests
-- [ ] One low-res frame every 10 s from Study windows only
-- [ ] Timelapse built at wrap-up with ffmpeg; frames deleted afterwards
-- [ ] Data panel
-- [ ] One-week audit of stored frames for the gate
-
-**Gate:** a one-week audit finds zero Private frames.
-
-## Phase 5 · Knowledge graph
-
-**Builds:** the nightly graph job and the full wrap-up screen. Starts only if the graph spike said go.
+**Builds:** the recap in the Wrap up view, for today or any earlier day, and two tidy-ups. Nothing new is recorded: every number comes from the focus blocks and spans already stored.
 
 **Features**
-- At wrap-up (or 10 pm), the day's Study text becomes 5 to 15 concepts per source, merged with earlier days.
-- A graph with today's concepts highlighted and linked to older ones.
-- A 3 to 5 sentence summary of the day.
-- Click a concept to list its sources; click a source to reopen it (G-1).
-- Rename, merge or delete concepts (G-2); browse by day, course and task (G-3).
-- The pet's habitat grows as the graph grows (G-5).
+- A focus heatmap of about the last four months, shaded by hours of focus per day, in place of "Last 7 days" (R-1).
+- A click on a day shows that day's recap; today is the default (R-2).
+- Hours of Study, Work, Relax and Private as one bar (R-3).
+- One list with a single total per app and site, in place of "Sites today", "Apps today" and "Stretches" (R-4).
+- Sites shown by name, never by address (R-5).
+- "What the pet has learned" folds shut, showing a count (R-6).
 
-**Uses:** Ollama or llama.cpp with a small open model, run offline once a day (G-4); a local vector index such as sqlite-vec for matching concepts by meaning; new `concept`, `concept_link`, `concept_mention` and `day_summary` tables; a separate process for the graph job so it does not stall the timer.
-
-**Tasks**
-- [ ] Move long jobs to their own sidecar process
-- [ ] Concept extraction per source
-- [ ] Merge with existing concepts by name and by embedding
-- [ ] Edges within a source, plus relations the model finds
-- [ ] Day summary record and summary text
-- [ ] Graph view in the wrap-up screen
-- [ ] Concept editing and browsing
-- [ ] Habitat growth
-
-**To decide:** the model, and the library that draws the graph.
-
-**Gate:** 7 of 10 concepts judged useful on a real day.
-
-## Phase 6 · More sources
-
-**Builds:** four more read-only task feeds.
-
-**Features**
-- Tasks from Obsidian, Notion, Todoist and Apple Reminders.
-- Deadlines from email, chosen senders only; the email itself is never stored (PR-7).
-- Each source shows its last sync and a "disconnect and delete" button (PR-9).
-
-**Uses:** local markdown files for Obsidian, read-only APIs for Notion, Todoist and Reminders, the local model from Phase 5 to pull deadlines out of email, the task fetcher from Phase 2.
+**Uses:** what is already there: the `session`, `app_span`, `activity_span`, `audio_span` and `mode_declaration` tables, `label_day` in `backend/modes.py`, plain HTML and CSS for the heatmap and the bar, and the browser's own `<details>` for the folding section. No new table, package or process.
 
 **Tasks**
-- [ ] Obsidian: read tasks from local markdown
-- [ ] Notion, Todoist and Reminders importers
-- [ ] Email: sender allowlist, deadline extraction, store only the task
-- [ ] Per-source sync status and disconnect
-- [ ] Check duplicate merging across all sources
+- [ ] The day commands take a date: `modes_today`, `site_time`, `app_time` and `audio_time` answer for any local day, today by default
+- [ ] Focus minutes per day for the heatmap's range, from `session`
+- [ ] Site names: a built-in list plus a name worked out from the address, with tests; used in the list, the pet's questions and the learned section
+- [ ] One list of apps and sites, with the browser's row less the time under its sites, with a test
+- [ ] Recap by mode as one bar with the hours beside it
+- [ ] Heatmap in Wrap up, replacing "Last 7 days"; a click picks the day, and the headline says which day is shown
+- [ ] Take out "Stretches" and the two separate lists
+- [ ] "What the pet has learned" as a folding section with a count
+- [ ] Look at all of it in the running dev app: today, an earlier day, a day with nothing noted, light and dark
+- [ ] Update `CHANGELOG.md` and `KNOWN_ISSUES.md` (item 66 goes away; items 2, 55 and the unencrypted database stay open)
 
-**Note:** distributing the app publicly with Gmail access needs Google's restricted-scope security review (PR-12).
+**Accepted limits:** an answer given today relabels earlier days; days before 2026-10-07 have focus hours and an empty recap; a name worked out from an address can be clumsy.
 
-**Gate:** duplicate tasks merged correctly.
+## Maybe later
+
+Built only if daily use asks for it. None of these is planned.
+
+- Quick commands, such as "start 50 minutes" (P-4)
+- Hold reminders for the next break, let a task due within 2 hours through, and a morning brief
+- The window title, to tell two documents in one app apart
+- More task sources: Obsidian, Notion, Todoist, Apple Reminders, email
+- Database encryption (SQLCipher) and a data panel with delete per day (PR-4, PR-8)
+- Bundling Python so the installed app does not run from the source tree (`KNOWN_ISSUES.md`, item 13)
+- Windows
+
+## Dropped on 2026-10-11
+
+- Capture of page text, PDFs, OCR and screen frames (was Phase 4)
+- The timelapse (was Phase 4)
+- The knowledge graph, its wrap-up screen and the growing habitat (was Phase 5)
+- The graph spike
