@@ -203,11 +203,18 @@
             <option value="roast">Roast</option>
           </select>
         </label>
-        <p><label><input id="block" type="checkbox" /> After 10 minutes of drift in a focus block, block that site for 5 minutes</label></p>
+        <p>
+          <label>Suggest a break after
+            <input id="break-after" type="number" min="0" max="600" required /> min of study or work</label>
+          <span class="muted">0 turns it off.</span>
+        </p>
+        <p><label><input id="block" type="checkbox" /> After 10 minutes of drift, block that site for 5 minutes</label></p>
         <p class="muted">
-          During a focus block the pet glances at you after 30 seconds on something Relax, speaks after 2 minutes and
-          sits in the middle of the screen after 5. Blocking is off unless you tick it, works in Chrome only, and
-          covers the site's pages until the 5 minutes are over.
+          The pet starts watching by itself once you have studied or worked for 5 minutes. Then it glances at you
+          after 30 seconds on something Relax, speaks after 2 minutes and sits in the middle of the screen after 5.
+          After 15 minutes it takes that as a break and lets go, and so does 5 minutes away from the laptop.
+          Blocking is off unless you tick it, works in Chrome only, and covers the site's pages until the 5 minutes
+          are over.
         </p>
       </section>
       <section>

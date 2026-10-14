@@ -348,19 +348,23 @@ mod tests {
         note_sample(0, true, false, t + 10);
         assert!(chrome_private(t + 11));
 
-        // the ladder, through the sidecar: nothing is drift without a focus block, and Steam is with one
+        // the keeper, through the sidecar: off until study or work has added up, so Steam is not drift yet
         let mut sidecar = spawn_sidecar().unwrap();
-        let steam = json!({ "app": "Steam", "bundle_id": "com.valvesoftware.steam", "domain": null, "url": null, "rules": {}, "declared": null });
-        let idle = json!({ "step": 0, "seconds": 0, "what": null, "returned": false, "mode": "relax" });
-        assert_eq!(call(&mut sidecar, "drift", Some(steam.clone())).unwrap(), idle);
-        call(&mut sidecar, "timer", Some(json!({ "action": "start_focus", "focus_min": 25, "break_min": 5 }))).unwrap();
-        assert_eq!(call(&mut sidecar, "drift", Some(steam.clone())).unwrap()["what"], "Steam");
-        let mut relaxing = steam;
-        relaxing["declared"] = json!("relax");
-        assert_eq!(call(&mut sidecar, "drift", Some(relaxing)).unwrap(), idle);
-        // an app nothing knows is Study by context while the block runs; this is what the pet's face follows
+        let steam = json!({ "app": "Steam", "bundle_id": "com.valvesoftware.steam", "domain": null, "url": null, "rules": {}, "declared": null, "break_after_min": 50 });
+        let off = json!({ "step": 0, "seconds": 0, "what": null, "returned": false, "on": false, "break": false, "mode": "relax" });
+        assert_eq!(call(&mut sidecar, "watch", Some(steam)).unwrap(), off);
+        // an app nothing knows has no mode; this is what the pet's face follows
         let preview = json!({ "app": "Preview", "bundle_id": "com.apple.Preview", "rules": {}, "declared": null });
-        assert_eq!(call(&mut sidecar, "drift", Some(preview)).unwrap()["mode"], "study");
+        assert_eq!(call(&mut sidecar, "watch", Some(preview)).unwrap()["mode"], Value::Null);
+
+        // the break length: 50 minutes unless the user set one, and 0 is kept as "never"
+        let conn = Connection::open_in_memory().unwrap();
+        init_db(&conn).unwrap();
+        assert_eq!(modes::break_after(&conn).unwrap(), 50);
+        for (stored, minutes) in [("0", 0), ("90", 90), ("soon", 50), ("", 50)] {
+            conn.execute("INSERT OR REPLACE INTO setting (key, value) VALUES ('break_after_min', ?1)", [stored]).unwrap();
+            assert_eq!(modes::break_after(&conn).unwrap(), minutes, "{stored:?}");
+        }
         // PR-11: audio is on for two samples after the extension last said so
         assert!(!browser::audio_on(t + 100));
 

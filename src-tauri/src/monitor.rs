@@ -189,7 +189,7 @@ pub(crate) fn audio_time(db: State<Db>, day: Option<String>) -> Result<i64, Stri
     audio_time_on(&lock(&db.0), day.as_deref()).map_err(|e| e.to_string())
 }
 
-/// Samples the front app every 5 s, except during a break (C-4) and with nobody at the keyboard.
+/// Samples the front app every 5 s, except while the pet looks away and with nobody at the keyboard.
 pub(crate) fn start(app: AppHandle) {
     std::thread::spawn(move || {
         let mut drift = Value::Null; // the drift state the windows last heard
@@ -228,14 +228,17 @@ pub(crate) fn start(app: AppHandle) {
                     Ok((block, json!({
                         "app": name, "bundle_id": bundle, "domain": page.0, "url": page.1,
                         "rules": crate::modes::rule_map(&conn)?, "declared": crate::modes::declared(&conn)?,
+                        "break_after_min": crate::modes::break_after(&conn)?,
                     })))
                 })
             };
-            // the ladder is in backend/drift.py; the pet hears each change as a "drift" event, which
-            // also carries what its face shows: the mode of what is in front, and whether audio is on
+            // the keeper and its ladder are in backend/drift.py; the pet hears each change as a "drift"
+            // event, which also carries what its face shows: the mode of what is in front, and whether
+            // audio is on
             let checked = stored.map_err(|e| e.to_string()).and_then(|(block, front)| {
                 let site = front["domain"].as_str().map(str::to_string);
-                let mut state = sidecar_call(&app.state::<Backend>(), "drift", Some(front))?;
+                let after = front["break_after_min"].as_i64().unwrap_or(50);
+                let mut state = sidecar_call(&app.state::<Backend>(), "watch", Some(front))?;
                 // R-5: the pet's line names the site, never its address
                 if let (Some(site), true) = (&site, state["what"].is_string()) {
                     state["what"] = json!(crate::modes::site_name(site));
@@ -244,6 +247,16 @@ pub(crate) fn start(app: AppHandle) {
                 // blocked, an app cannot
                 if let (true, Some(site)) = (block && state["step"] == 4 && drift["step"] != 4, site) {
                     crate::browser::block(&site, BLOCK_MIN);
+                }
+                // the minute loop in lib.rs holds reminders and questions back while the keeper is on
+                crate::modes::KEEPER_ON.store(state["on"] == true, std::sync::atomic::Ordering::Relaxed);
+                // said once per run of study or work, then taken off so the windows are not told twice
+                if state["break"] == true {
+                    crate::session::play_sound(&app, "Glass");
+                    let _ = app.emit("reminder", format!("You've been at it for {after} minutes. Take a break?"));
+                }
+                if let Some(state) = state.as_object_mut() {
+                    state.remove("break");
                 }
                 Ok::<_, String>(state)
             });

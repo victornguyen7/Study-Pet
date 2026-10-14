@@ -518,15 +518,21 @@ async function loadAsks() {
 run(async () => showLearned(await invoke<Rule[]>("learned")));
 
 // the focus keeper's settings (keeper in src-tauri/src/modes.rs)
-type Keeper = { personality: string; block: boolean };
+type Keeper = { personality: string; block: boolean; break_after: number };
 const personality = $<HTMLSelectElement>("personality");
 const blockDrift = $<HTMLInputElement>("block");
+const breakAfter = $<HTMLInputElement>("break-after");
 const showKeeper = (k: Keeper) => {
   personality.value = k.personality;
   blockDrift.checked = k.block;
+  if (document.activeElement !== breakAfter) breakAfter.value = String(k.break_after);
 };
 personality.onchange = () => run(async () => showKeeper(await invoke<Keeper>("keeper", { personality: personality.value })));
 blockDrift.onchange = () => run(async () => showKeeper(await invoke<Keeper>("keeper", { block: blockDrift.checked })));
+breakAfter.onchange = () => {
+  if (breakAfter.reportValidity())
+    run(async () => showKeeper(await invoke<Keeper>("keeper", { breakAfter: breakAfter.valueAsNumber })));
+};
 run(async () => showKeeper(await invoke<Keeper>("keeper")));
 
 // PR-10: macOS is only ever made to ask from this button, which sits under the explanation

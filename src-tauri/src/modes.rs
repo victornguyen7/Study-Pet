@@ -274,12 +274,21 @@ pub(crate) fn learned(db: State<Db>, key: Option<String>, name: Option<String>, 
     rules(&conn).map_err(|e| e.to_string())
 }
 
-// ---- Focus keeper settings: the voice of the pet's lines, and the opt-in block (ladder step 4) ----
+// ---- Focus keeper settings: the voice of the pet's lines, the opt-in block (ladder step 4), and
+// how long a run of study or work is before the pet suggests a break ----
 
-/// { personality: "gentle" | "sassy" | "roast", block: bool }. Pass either to change it; every window
-/// hears the new settings as a "keeper" event.
+/// True while the keeper is on (Keeper in backend/drift.py). The front-app monitor sets it with each sample.
+pub(crate) static KEEPER_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Minutes of study or work before a break is suggested. 0 is never; 50 when unset or unreadable.
+pub(crate) fn break_after(conn: &Connection) -> rusqlite::Result<i64> {
+    Ok(crate::db::setting(conn, "break_after_min")?.and_then(|v| v.parse().ok()).unwrap_or(50))
+}
+
+/// { personality: "gentle" | "sassy" | "roast", block: bool, break_after: minutes }. Pass any to
+/// change it; every window hears the new settings as a "keeper" event.
 #[tauri::command]
-pub(crate) fn keeper(app: AppHandle, personality: Option<String>, block: Option<bool>) -> Result<Value, String> {
+pub(crate) fn keeper(app: AppHandle, personality: Option<String>, block: Option<bool>, break_after: Option<i64>) -> Result<Value, String> {
     let db = app.state::<Db>();
     let conn = lock(&db.0);
     let set = |key: &str, value: &str| conn.execute("INSERT OR REPLACE INTO setting (key, value) VALUES (?1, ?2)", (key, value));
@@ -289,10 +298,15 @@ pub(crate) fn keeper(app: AppHandle, personality: Option<String>, block: Option<
     if let Some(on) = block {
         set("block_drift", if on { "1" } else { "0" }).map_err(|e| e.to_string())?;
     }
+    // up to 10 hours; anything else is left as it was
+    if let Some(minutes) = break_after.filter(|m| (0..=600).contains(m)) {
+        set("break_after_min", &minutes.to_string()).map_err(|e| e.to_string())?;
+    }
     let get = |key: &str| crate::db::setting(&conn, key).map_err(|e| e.to_string());
     let state = json!({
         "personality": get("personality")?.unwrap_or_else(|| "gentle".into()),
         "block": get("block_drift")?.as_deref() == Some("1"),
+        "break_after": self::break_after(&conn).map_err(|e| e.to_string())?,
     });
     app.emit("keeper", &state).map_err(|e| e.to_string())?;
     Ok(state)
