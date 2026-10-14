@@ -28,7 +28,7 @@
 
     npm run build
     cd src-tauri && cargo test
-    backend/.venv/bin/python -m unittest backend.tests.test_timer backend.tests.test_streaks backend.tests.test_tasks backend.tests.test_feeds backend.tests.test_fetcher backend.tests.test_modes backend.tests.test_drift
+    backend/.venv/bin/python -m unittest backend.tests.test_streaks backend.tests.test_tasks backend.tests.test_feeds backend.tests.test_fetcher backend.tests.test_modes backend.tests.test_drift
 
 ## Review Focus
 

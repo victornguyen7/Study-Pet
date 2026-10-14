@@ -175,7 +175,8 @@ Spec: `docs/superpowers/specs/2026-10-13-auto-record-design.md`. Plan: `docs/sup
 - [x] The timer, presets, breaks and task Start removed from the core and the panel
 - [ ] Look at it in the running dev app: Today without the tank, the heatmap in light and dark, the break length in Settings (2026-10-13: the dev app was run for 95 seconds and its log read, with no error; the windows were not looked at)
 - [ ] By hand: 5 minutes of study opens the pet's eyes, a Relax site then gets a glance and a line, coming back gets "Welcome back", and the break line comes with its sound
-- [ ] Remove `timer` and `drift` from the sidecar, and `backend/timer.py`, when the everyday app is next reinstalled (the plan's Task 6)
+- [x] Remove `timer` and `drift` from the sidecar, and `backend/timer.py` (the plan's Task 6): done 2026-10-13 at the user's request
+- [ ] Rebuild and reinstall the everyday app, backing up `pet.db` first (`KNOWN_ISSUES.md`, item 34). Until then its timer does not work, since the sidecar it starts from this tree no longer has one
 
 ## Maybe later
 

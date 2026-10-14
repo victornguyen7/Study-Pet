@@ -550,4 +550,4 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 ### The sidecar keeps `timer` and `drift` until the everyday app is reinstalled
 - **Why:** the app in `/Applications` starts Python from this source tree (`KNOWN_ISSUES.md`, item 33), so removing either method would stop its timer at once. The new rule went in beside them, as the class `Keeper` and the method `watch`.
 - **Gave up:** `backend/timer.py` and two unused methods stay in the tree for now.
-- **Revisit when:** the user asks for a reinstall; then delete them (the plan's Task 6).
+- **Done 2026-10-13:** the user asked for them to be removed the same day, ahead of the reinstall. The installed app's timer is broken until it is rebuilt.
