@@ -62,3 +62,55 @@ class Drift:
             "what": what if drifting else None,
             "returned": returned,
         }
+
+
+ON_AFTER = 300  # seconds of Study or Work before the keeper turns on
+OFF_AFTER = 900  # this much Relax in a row was a break: the keeper turns off
+AWAY_SECS = 300  # no sample for this long (the lid was shut, or nobody was there) was a break too
+
+
+class Keeper:
+    """Turns the focus keeper on and off by itself, and runs the ladder (Drift) while it is on.
+
+    On after ON_AFTER of Study or Work. Off after a break: OFF_AFTER of Relax in a row, AWAY_SECS
+    with no sample, or the user saying they are relaxing. A break is suggested once per run.
+    """
+
+    def __init__(self):
+        self.drift = Drift()
+        self.last = None  # when update was last called
+        self.earned = 0  # seconds of Study or Work since the keeper was last off
+        self.on_since = None  # None while the keeper is off
+        self.suggested = False  # a break has been suggested in this run
+
+    def _off(self):
+        self.drift = Drift()  # a fresh ladder, so a break is not answered with "welcome back"
+        self.earned, self.on_since, self.suggested = 0, None, False
+
+    # ponytail: while the keeper is off, `earned` only goes up, so two minutes of work, an hour of
+    # Relax with no gap, and three more minutes turn it on. Let Relax wear `earned` down if that
+    # turns it on too easily.
+    def update(self, now, mode, drifting, what=None, music=False, relax_declared=False, break_after_min=50):
+        """Called with every sample of the front app. mode: study, work, relax, private or None.
+        -> Drift.update's state, plus {"on": the keeper is on, "break": True on the one update
+        that suggests a break}."""
+        gap = AWAY_SECS if self.last is None else now - self.last
+        self.last = now
+        if gap >= AWAY_SECS or relax_declared:
+            self._off()
+        elif mode in ("study", "work") and not drifting and not music and gap <= GAP_SECS:
+            self.earned += gap
+        if self.on_since is None and self.earned >= ON_AFTER:
+            self.on_since = now
+        on = self.on_since is not None
+        state = self.drift.update(now, on and drifting, what, music=on and music)
+        if state["seconds"] >= OFF_AFTER:
+            self._off()
+            on, state = False, self.drift.update(now, False)
+        # the run began ON_AFTER before the keeper turned on
+        suggest = (
+            on and not self.suggested and break_after_min > 0
+            and now - self.on_since + ON_AFTER >= break_after_min * 60
+        )
+        self.suggested = self.suggested or suggest
+        return state | {"on": on, "break": suggest}

@@ -9,7 +9,7 @@ import json
 import sys
 import time
 
-from backend.drift import Drift, is_drift, is_music
+from backend.drift import Drift, Keeper, is_drift, is_music
 from backend.modes import classify, label_day
 from backend.streaks import streak
 from backend.tasks import parse_quick_add
@@ -55,12 +55,31 @@ def drift(params):
     return state | {"mode": classify(params, params.get("declared"), rules, _timer.phase == "focus")[0]}
 
 
+_keeper = Keeper()
+
+
+def watch(params):
+    """params: {app, bundle_id, domain, url, rules, declared, break_after_min}, what is in front now.
+    The focus keeper turns itself on and off (Keeper in backend/drift.py).
+    -> Keeper.update's state, plus "mode": study, work, relax, private or None, for the pet's face."""
+    rules, declared = params.get("rules"), params.get("declared")
+    after = params.get("break_after_min")
+    mode = classify(params, declared, rules)[0]
+    state = _keeper.update(
+        time.time(), mode, is_drift(params, rules), params.get("domain") or params.get("app"),
+        music=is_music(params, rules), relax_declared=declared == "relax",
+        break_after_min=after if isinstance(after, (int, float)) else 50,
+    )
+    return state | {"mode": mode}
+
+
 METHODS = {
     "ping": ping,
     "timer": timer,
     "streak": lambda params: streak(**params),
     "modes": modes,
     "drift": drift,
+    "watch": watch,
     "quick_add": lambda params: parse_quick_add(**params),
 }
 
