@@ -1,9 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { onStreak, type StreakState } from "../streak";
-import { onTimer, timer } from "../timer";
 
-type Preset = { id: number; name: string; focus_min: number; break_min: number };
 // Mirrors streak_input() in src-tauri/src/db.rs
 type Day = {
   minutes: Record<string, number>; // "YYYY-MM-DD" -> minutes of study and work
@@ -22,7 +20,6 @@ type Task = {
   done: boolean;
   source: Source | null; // where it was imported from
   removed: boolean; // imported, and no longer in its source's feed
-  spent_min: number; // focus time in sessions tied to it
   same_as: { id: number; title: string; source: Source } | null; // a typed task's likely imported copy
   soon: boolean; // the time left until it is due is under twice the work left
   ask_submitted: boolean; // imported and past due: the feed can't say whether it was handed in
@@ -46,9 +43,6 @@ type Feed = {
 type CalendarEvent = { title: string; start_at: string; end_at: string; all_day: boolean };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const focus = $<HTMLInputElement>("focus");
-const brk = $<HTMLInputElement>("break");
-const form = $<HTMLFormElement>("start");
 const threshold = $<HTMLInputElement>("threshold");
 
 function el(tag: string, text = "", className = "") {
@@ -68,7 +62,6 @@ async function run(call: () => Promise<unknown>) {
   }
 }
 
-const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 function duration(minutes: number) {
   if (minutes < 1) return "under 1 min";
   const m = Math.floor(minutes);
@@ -88,65 +81,6 @@ for (const button of views)
     }
   };
 
-// ---- presets (S-1): a preset fills in the lengths; the user can still change them ----
-
-async function loadPresets() {
-  const presets = await invoke<Preset[]>("list_presets");
-  $("presets").replaceChildren(
-    ...presets.map((p) => {
-      const b = el("button", p.name);
-      b.onclick = () => {
-        focus.value = String(p.focus_min);
-        brk.value = String(p.break_min);
-      };
-      return b;
-    }),
-  );
-  $("preset-list").replaceChildren(
-    ...presets.map((p) => {
-      const li = el("li");
-      const remove = el("button", "Remove");
-      remove.setAttribute("aria-label", `Remove preset ${p.name}`);
-      remove.onclick = () =>
-        run(async () => {
-          await invoke("delete_preset", { id: p.id });
-          await loadPresets();
-        });
-      li.append(el("span", `${p.focus_min} min focus, ${p.break_min} min break`), remove);
-      return li;
-    }),
-  );
-  if (!presets.length)
-    $("preset-list").append(el("li", "No presets yet.", "empty"));
-}
-
-// ---- session controls ----
-
-// S-2: a session can be for one task. `task` comes from a task's own start button, or from the "Working on" list.
-const taskPick = $<HTMLSelectElement>("task-pick");
-let openTasks: Task[] = [];
-
-function startFocus(task?: Task) {
-  if (!form.reportValidity()) return;
-  const tied = task && { label: task.title, task_id: task.id };
-  run(() => timer({ action: "start_focus", focus_min: focus.valueAsNumber, break_min: brk.valueAsNumber, ...tied }));
-}
-
-form.onsubmit = (e) => {
-  e.preventDefault();
-  startFocus(openTasks.find((t) => String(t.id) === taskPick.value));
-};
-$("save").onclick = () => {
-  if (!form.reportValidity()) return;
-  run(async () => {
-    await invoke("add_preset", { focusMin: focus.valueAsNumber, breakMin: brk.valueAsNumber });
-    await loadPresets();
-  });
-};
-$("resume").onclick = () => run(() => timer({ action: "resume" }));
-$("skip").onclick = () => run(() => timer({ action: "skip_break" }));
-$("stop").onclick = () => run(() => timer({ action: "stop" }));
-
 // ---- tasks: quick add, then a checkbox and a delete button per task ----
 
 const taskText = $<HTMLInputElement>("task-text");
@@ -163,14 +97,6 @@ for (const button of filters)
 async function loadTasks() {
   const all = await invoke<Task[]>("list_tasks");
   const today = new Date().toLocaleDateString("en-CA"); // "YYYY-MM-DD"
-  openTasks = all.filter((t) => !t.done);
-  const picked = taskPick.value;
-  taskPick.replaceChildren(
-    new Option("No task", ""),
-    ...openTasks.map((t) => new Option(t.course ? `${t.title} (${t.course})` : t.title, String(t.id))),
-  );
-  taskPick.value = openTasks.some((t) => String(t.id) === picked) ? picked : "";
-  showFinished();
   // Today: due today or overdue, undated, and the ones checked off today (list_tasks returns no older done ones)
   const tasks = filter === "all" ? all : all.filter((t) => t.done || t.due === null || t.due <= today);
   $("tasks").replaceChildren(
@@ -197,11 +123,7 @@ async function loadTasks() {
       const details = [
         t.course,
         due && `${late ? "was due" : "due"} ${due}`,
-        t.estimate_min
-          ? t.spent_min >= 1
-            ? `${duration(t.spent_min)} of ${duration(t.estimate_min)}`
-            : duration(t.estimate_min)
-          : t.spent_min >= 1 && `${duration(t.spent_min)} spent`,
+        t.estimate_min && duration(t.estimate_min),
         t.removed && t.source && `removed from ${sourceNames[t.source]}`,
       ];
       const extras: HTMLElement[] = [];
@@ -227,13 +149,6 @@ async function loadTasks() {
             await loadTasks();
           });
         extras.push(merge);
-      }
-      if (!t.done) {
-        const start = el("button", "▶", "start");
-        start.title = "Start a focus block for this task";
-        start.setAttribute("aria-label", `Start a focus block for ${t.title}`);
-        start.onclick = () => startFocus(t);
-        extras.push(start);
       }
       const remove = el("button", "×");
       remove.setAttribute("aria-label", `Delete task ${t.title}`);
@@ -441,23 +356,6 @@ async function loadCourses() {
   );
 }
 
-// ---- "Finished it?": asked in the break after a focus block that was for a task ----
-
-let lastTimer: { phase: string; task_id: number | null } = { phase: "idle", task_id: null };
-
-function showFinished() {
-  const resting = lastTimer.phase === "break" || lastTimer.phase === "callback";
-  const task = resting ? openTasks.find((t) => t.id === lastTimer.task_id) : undefined;
-  $("finished").hidden = !task;
-  if (task) $("finished-text").textContent = `Finished “${task.title}”?`;
-}
-
-$("mark-done").onclick = () =>
-  run(async () => {
-    await invoke("set_task_done", { id: lastTimer.task_id, done: true });
-    await loadTasks();
-  });
-
 threshold.onchange = () => {
   if (threshold.reportValidity())
     run(() => invoke("set_streak_threshold", { minutes: threshold.valueAsNumber }));
@@ -472,7 +370,7 @@ run(async () => {
 // the user's own word on the mode, which beats every rule in backend/modes.py
 const mode = $<HTMLSelectElement>("mode");
 mode.onchange = () => run(() => invoke("declared_mode", { set: mode.value }));
-// it ends by itself at midnight, and "relax" ends when a focus block starts
+// it ends by itself at midnight
 const loadMode = async () => {
   mode.value = (await invoke<string | null>("declared_mode")) ?? "";
 };
@@ -546,10 +444,7 @@ $("ax-ask").onclick = () => run(() => loadAccessibility(true));
 window.addEventListener("focus", () => run(loadAccessibility));
 run(loadAccessibility);
 
-const titles = { idle: "", focus: "Focus", break: "Break", callback: "Break's over" };
-const level = document.querySelector<HTMLElement>(".level")!;
-
-// ---- the day: today's blocks, the wrap-up and the 7-day strip ----
+// ---- the day: the streak, the wrap-up and the heatmap ----
 
 function timeRows(list: string, rows: [name: string, seconds: number, className?: string][]) {
   $(list).replaceChildren(
@@ -673,7 +568,6 @@ async function loadDay(streak: StreakState) {
   showHeatmap(day);
 }
 
-run(loadPresets);
 // Rust sends "tasks" after every feed sync, whether it ran on the half hour or from Settings
 const loadImports = () => Promise.all([loadTasks(), loadEvents(), loadFeeds(), loadStale(), loadCourses()]);
 run(loadImports);
@@ -682,35 +576,6 @@ run(() =>
   listen("tasks", () => {
     run(loadImports);
     run(refreshSyncResult);
-  }),
-);
-run(() =>
-  onTimer((s) => {
-    $("idle").hidden = s.phase !== "idle";
-    $("running").hidden = s.phase === "idle";
-    $("phase").textContent = titles[s.phase];
-    $("working-on").hidden = !s.label;
-    $("working-on").textContent = s.label ?? "";
-    // a block just ended or began: the time spent on its task has changed
-    const changed = s.phase !== lastTimer.phase;
-    lastTimer = s;
-    if (changed) {
-      run(loadTasks);
-      run(loadMode);
-    }
-    else showFinished();
-    $("clock").textContent = s.phase === "callback" ? "" : mmss(s.remaining);
-    $("resume").hidden = s.phase !== "callback";
-    $("skip").hidden = s.phase !== "break";
-    // water rises through a focus block, drains through a break
-    const filled =
-      s.phase === "focus"
-        ? 1 - s.remaining / (s.focus_min * 60)
-        : s.phase === "break"
-          ? s.remaining / (s.break_min * 60)
-          : 0;
-    level.style.setProperty("--level", `${filled * 100}%`);
-    level.hidden = filled === 0;
   }),
 );
 run(() =>

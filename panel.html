@@ -16,44 +16,6 @@
     </nav>
 
     <main id="today">
-      <!-- the tank: its water level rises through a focus block and drains through a break -->
-      <section class="tank" aria-label="Session">
-        <div class="level"></div>
-
-        <div id="idle">
-          <h1>Ready when you are</h1>
-          <div id="presets" class="row"></div>
-          <form id="start">
-            <div class="row">
-              <label>Focus <input id="focus" type="number" min="1" value="25" required /> min</label>
-              <label>Break <input id="break" type="number" min="1" value="5" required /> min</label>
-            </div>
-            <div class="row">
-              <label>Working on <select id="task-pick"><option value="">No task</option></select></label>
-            </div>
-            <div class="row">
-              <button class="primary">Start focus</button>
-              <button type="button" id="save">Save as preset</button>
-            </div>
-          </form>
-        </div>
-
-        <div id="running" hidden>
-          <h1 id="phase"></h1>
-          <p id="working-on" hidden></p>
-          <p id="clock" role="timer"></p>
-          <div class="row">
-            <button id="resume" class="primary">I'm back</button>
-            <button id="skip">Skip break</button>
-            <button id="stop">Stop session</button>
-          </div>
-          <div id="finished" class="row" hidden>
-            <span id="finished-text"></span>
-            <button id="mark-done">Yes, check it off</button>
-          </div>
-        </div>
-      </section>
-
       <section class="row">
         <label>Right now I'm
           <select id="mode">
@@ -145,25 +107,20 @@
         <p class="muted">
           The time each app and site was in front, checked every 5 seconds: its name and the time only. A site is
           listed only if you said yes to it in the Chrome extension; the rest of the browser's time is under the
-          browser. Password managers, chat and mail apps are counted together as “Private”. Not during breaks, and
-          only while Study Pet is running. Sound is noted as on or off, never what was playing.
+          browser. Password managers, chat and mail apps are counted together as “Private”. Only while Study Pet is
+          running. Sound is noted as on or off, never what was playing.
         </p>
       </section>
     </main>
 
     <main id="settings" hidden>
       <section>
-        <h2>Presets</h2>
-        <ul id="preset-list" class="rows"></ul>
-        <p class="muted">Add one from Today with “Save as preset”.</p>
-      </section>
-      <section>
         <h2>Streak</h2>
         <label>A day counts at <input id="threshold" type="number" min="1" max="1440" required /> min of study or work</label>
       </section>
       <section>
         <h2>Sounds</h2>
-        <label><input id="sounds" type="checkbox" /> Play a sound when a break starts and when it ends</label>
+        <label><input id="sounds" type="checkbox" /> Play a sound when the pet suggests a break</label>
       </section>
       <section>
         <h2>Imports</h2>

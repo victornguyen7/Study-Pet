@@ -2,10 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusqlite::{Connection, OptionalExtension};
-use chrono::DateTime;
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::State;
 
 // ---- SQLite store ----
 
@@ -21,6 +18,8 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 // ponytail: plain SQLite. Spec PR-4 wants encryption at rest: swap rusqlite's
 // "bundled" feature for "bundled-sqlcipher" + a keychain key before Phase 4 stores captured text.
 pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
+    // preset and session are from the focus-block timer, which is gone: preset is no longer read, and
+    // session only for days before `auto_since` (streak_input) and old tasks' time (tasks.rs)
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS preset (
             id INTEGER PRIMARY KEY,
@@ -124,79 +123,6 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         // set when the user deletes an imported task: the row stays, so the next sync cannot bring it back
         conn.execute_batch("ALTER TABLE task ADD COLUMN hidden_at TEXT; PRAGMA user_version = 3;")?;
     }
-    Ok(())
-}
-
-#[derive(Serialize)]
-pub(crate) struct Preset {
-    id: i64,
-    name: String,
-    focus_min: i64,
-    break_min: i64,
-}
-
-#[tauri::command]
-pub(crate) fn list_presets(db: State<Db>) -> Result<Vec<Preset>, String> {
-    let conn = lock(&db.0);
-    let mut stmt = conn
-        .prepare("SELECT id, name, focus_min, break_min FROM preset ORDER BY id")
-        .map_err(|e| e.to_string())?;
-    let presets = stmt
-        .query_map([], |r| {
-            Ok(Preset {
-                id: r.get(0)?,
-                name: r.get(1)?,
-                focus_min: r.get(2)?,
-                break_min: r.get(3)?,
-            })
-        })
-        .and_then(|rows| rows.collect::<rusqlite::Result<Vec<_>>>())
-        .map_err(|e| e.to_string())?;
-    Ok(presets)
-}
-
-#[tauri::command]
-pub(crate) fn add_preset(db: State<Db>, focus_min: i64, break_min: i64) -> Result<(), String> {
-    if focus_min < 1 || break_min < 1 {
-        return Err("focus and break must be at least 1 minute".into());
-    }
-    lock(&db.0)
-        .execute(
-            "INSERT OR IGNORE INTO preset (name, focus_min, break_min) VALUES (?1, ?2, ?3)",
-            (format!("{focus_min}/{break_min}"), focus_min, break_min),
-        )
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub(crate) fn delete_preset(db: State<Db>, id: i64) -> Result<(), String> {
-    lock(&db.0)
-        .execute("DELETE FROM preset WHERE id = ?1", [id])
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// A finished focus block, as reported by backend/timer.py. Times are epoch seconds.
-#[derive(Deserialize)]
-pub(crate) struct Session {
-    pub(crate) started_at: f64,
-    pub(crate) ended_at: f64,
-    pub(crate) planned_min: f64,
-    pub(crate) break_min: f64,
-    pub(crate) label: Option<String>,
-    #[serde(default)]
-    pub(crate) task_id: Option<i64>, // S-2: the task the block was for
-}
-
-pub(crate) fn save_session(conn: &Connection, s: &Session) -> rusqlite::Result<()> {
-    let iso = |secs: f64| DateTime::from_timestamp(secs as i64, 0).map(|t| t.to_rfc3339());
-    conn.execute(
-        // the subquery turns a task deleted or merged away mid-block into "no task", so the block is still kept
-        "INSERT INTO session (started_at, ended_at, planned_min, break_min, label, task_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, (SELECT id FROM task WHERE id = ?6))",
-        (iso(s.started_at), iso(s.ended_at), s.planned_min, s.break_min, &s.label, s.task_id),
-    )?;
     Ok(())
 }
 

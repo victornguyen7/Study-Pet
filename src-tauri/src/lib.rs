@@ -2,7 +2,6 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use rusqlite::Connection;
-use serde_json::json;
 use tauri::{Emitter, Manager, WindowEvent};
 
 mod sidecar;
@@ -24,7 +23,7 @@ mod monitor;
 mod modes;
 
 mod session;
-use session::{play_sound, streak_state, timer_action};
+use session::streak_state;
 
 mod tasks;
 use tasks::take_reminder;
@@ -60,60 +59,28 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             monitor::start(app.handle().clone());
 
-            // drive the timer once a second; every window hears the new state as a "timer" event
+            // once a minute: reminders, questions, and the streak, so "today" rolls over at midnight
+            // while the pet stays open
             let handle = app.handle().clone();
-            std::thread::spawn(move || {
-                let mut rang = json!(null); // the [phase, calls] a sound was last played for
-                for second in 1u64.. {
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                    let state = timer_action(&handle, json!({ "action": "tick" }));
-                    if let Err(e) = &state {
-                        eprintln!("timer tick failed: {e}");
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_secs(60));
+                // a task that has become due soon is mentioned by the pet, but never while the keeper
+                // is on: it waits, unmarked, and the first check after the user stops picks it up
+                if !modes::KEEPER_ON.load(std::sync::atomic::Ordering::Relaxed) {
+                    let text = take_reminder(&lock(&handle.state::<Db>().0));
+                    match text {
+                        Ok(Some(text)) => drop(handle.emit("reminder", text)),
+                        // nothing due: an app or site the pet cannot place is asked about, once each
+                        Ok(None) => match modes::question(&handle) {
+                            Ok(Some(text)) => drop(handle.emit("reminder", text)),
+                            Ok(None) => {}
+                            Err(e) => eprintln!("mode question failed: {e}"),
+                        },
+                        Err(e) => eprintln!("reminder check failed: {e}"),
                     }
-                    // C-4: pages from the extension and the front app are not noted during a break
-                    #[cfg(unix)]
-                    browser::PAUSED.store(
-                        state.as_ref().is_ok_and(|s| s["phase"] == "break"),
-                        std::sync::atomic::Ordering::Relaxed,
-                    );
-                    // a break that starts, and each time the pet calls the user back from one
-                    if let Ok(s) = &state {
-                        let key = json!([s["phase"], s["calls"]]);
-                        if key != rang {
-                            match s["phase"].as_str() {
-                                Some("break") => play_sound(&handle, "Glass"),
-                                Some("callback") => play_sound(&handle, "Ping"),
-                                _ => {}
-                            }
-                            rang = key;
-                        }
-                    }
-                    // once a minute, so "today" rolls over at midnight while the pet stays open
-                    if second % 60 == 0 {
-                        let idle = state.as_ref().is_ok_and(|s| s["phase"] == "idle");
-                        // a task that has become due soon is mentioned by the pet, but never during a focus
-                        // block: it waits, unmarked, and the first check after the block ends picks it up
-                        if state.is_ok_and(|s| s["phase"] != "focus") {
-                            let text = take_reminder(&lock(&handle.state::<Db>().0));
-                            match text {
-                                Ok(Some(text)) => drop(handle.emit("reminder", text)),
-                                // nothing due: an app or site the pet cannot place is asked about, once each
-                                // S-7: and with no question either, study outside a session gets an offer
-                                Ok(None) => match modes::question(&handle).and_then(|q| match q {
-                                    None if idle => modes::offer(&handle),
-                                    q => Ok(q),
-                                }) {
-                                    Ok(Some(text)) => drop(handle.emit("reminder", text)),
-                                    Ok(None) => {}
-                                    Err(e) => eprintln!("mode question failed: {e}"),
-                                },
-                                Err(e) => eprintln!("reminder check failed: {e}"),
-                            }
-                        }
-                        if let Err(e) = streak_state(&handle) {
-                            eprintln!("streak refresh failed: {e}");
-                        }
-                    }
+                }
+                if let Err(e) = streak_state(&handle) {
+                    eprintln!("streak refresh failed: {e}");
                 }
             });
 
@@ -178,11 +145,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            db::list_presets,
-            db::add_preset,
-            db::delete_preset,
             session::day,
-            session::timer,
             session::streak,
             session::set_streak_threshold,
             session::sounds,
@@ -210,28 +173,30 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|app, event| {
-            // quitting stops the timer first, so the focus block in progress is stored with the
-            // minutes it ran (S-6), as if Stop had been pressed
-            // ponytail: an ordinary quit only. A crash or a force quit still loses the block; store
-            // the running block every minute if that happens in real use.
-            if let tauri::RunEvent::Exit = event {
-                if let Err(e) = timer_action(app, json!({ "action": "stop" })) {
-                    eprintln!("stopping the timer at quit failed: {e}");
-                }
-            }
-        });
+        .run(|_, _| {});
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::Value;
-    use db::{save_session, setting, streak_input, Session};
+    use serde_json::{json, Value};
+    use db::{setting, streak_input};
     use sidecar::{call, sidecar_call, spawn_sidecar};
     use feeds::*;
     use keychain::{keychain_delete, keychain_get, keychain_set};
     use tasks::*;
+
+    /// A finished focus block from before recording was automatic, `secs` long, from epoch second `start`.
+    fn old_block(conn: &Connection, start: i64, secs: i64, task_id: Option<i64>) {
+        conn.execute(
+            // the subquery turns a task that is gone into "no task", as the timer's own insert did
+            "INSERT INTO session (started_at, ended_at, planned_min, break_min, task_id)
+             VALUES (strftime('%Y-%m-%dT%H:%M:%SZ', ?1, 'unixepoch'), strftime('%Y-%m-%dT%H:%M:%SZ', ?1 + ?2, 'unixepoch'), 50, 10,
+                     (SELECT id FROM task WHERE id = ?3))",
+            (start, secs, task_id),
+        )
+        .unwrap();
+    }
 
     #[test]
     fn sites_are_shown_by_name() {
@@ -301,11 +266,6 @@ mod tests {
         init_db(&conn).unwrap();
         let n: i64 = conn.query_row("SELECT count(*) FROM preset", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 2);
-
-        let s = Session { started_at: 0.0, ended_at: 1500.0, planned_min: 25.0, break_min: 5.0, label: None, task_id: None };
-        save_session(&conn, &s).unwrap();
-        let ended: String = conn.query_row("SELECT ended_at FROM session", [], |r| r.get(0)).unwrap();
-        assert_eq!(ended, "1970-01-01T00:25:00+00:00");
     }
 
     #[test]
@@ -497,14 +457,6 @@ mod tests {
             )
             .unwrap();
         assert!(ended_next_day);
-
-        // S-7: an offer needs 5 minutes of Study that is still going
-        let day = |mode: &str, start: i64, end: i64| json!({ "spans": [{ "mode": "relax", "start": 0, "end": 10 }, { "mode": mode, "start": start, "end": end }] });
-        assert!(modes::studying(&day("study", 1000, 1300), 1330));
-        for (mode, start, end, at) in [("study", 1000, 1299, 1330), ("study", 1000, 1300, 1400), ("relax", 1000, 1300, 1330)] {
-            assert!(!modes::studying(&day(mode, start, end), at));
-        }
-        assert!(!modes::studying(&json!({ "spans": [] }), 0));
 
         // PR-2: each unknown is brought up once, and stays out of the rules until it is answered
         let unknown = json!([{ "key": "preview", "name": "Preview", "seconds": 300 }, { "key": "canvas.school.edu", "name": "canvas.school.edu", "seconds": 200 }]);
@@ -875,12 +827,10 @@ mod tests {
         assert_eq!(call(&mut sidecar, "ping", None).unwrap()["pong"], true);
         assert!(call(&mut sidecar, "nope", None).is_err());
 
-        // an error a method raises leaves the process, and the block in progress, alone
+        // an error a method raises leaves the process alone
         let backend = Backend::default();
-        let start = json!({ "action": "start_focus", "focus_min": 25, "break_min": 5 });
-        sidecar_call(&backend, "timer", Some(start)).unwrap();
         assert!(sidecar_call(&backend, "quick_add", Some(json!({ "text": "", "today": "2026-10-20" }))).is_err());
-        assert_eq!(sidecar_call(&backend, "timer", Some(json!({ "action": "tick" }))).unwrap()["phase"], "focus");
+        assert_eq!(sidecar_call(&backend, "ping", None).unwrap()["pong"], true);
 
         let line = json!({ "text": "STAT 310 HW3 2026-10-23 2h", "today": "2026-10-20" });
         let task: NewTask = serde_json::from_value(call(&mut sidecar, "quick_add", Some(line)).unwrap()).unwrap();
@@ -894,13 +844,6 @@ mod tests {
             .unwrap();
         assert_eq!(row, ("HW3".into(), "STAT 310".into(), "2026-10-23".into(), 120, "todo".into()));
         assert!(call(&mut sidecar, "quick_add", Some(json!({ "text": "fri", "today": "2026-10-20" }))).is_err());
-
-        let start = json!({ "action": "start_focus", "focus_min": 25, "break_min": 5 });
-        assert_eq!(call(&mut sidecar, "timer", Some(start)).unwrap()["phase"], "focus");
-        let mut stopped = call(&mut sidecar, "timer", Some(json!({ "action": "stop" }))).unwrap();
-        assert_eq!(stopped["phase"], "idle");
-        let sessions: Vec<Session> = serde_json::from_value(stopped["sessions"].take()).unwrap();
-        assert_eq!(sessions.len(), 1);
     }
 
     /// Writes to the real login Keychain under a service name of its own, then removes it.
@@ -962,21 +905,13 @@ mod tests {
         let find = |id: i64| tasks(&conn).unwrap().into_iter().find(|t| t.id == id);
         let canvas_hw = tasks(&conn).unwrap().into_iter().find(|t| t.title == "Homework 3").unwrap().id;
 
-        // S-2: a block tied to a task counts toward it; one tied to a task that is gone is kept, untied
-        let block = |task_id: Option<i64>| Session { started_at: 0.0, ended_at: 45.0 * 60.0, planned_min: 50.0, break_min: 10.0, label: None, task_id };
-        save_session(&conn, &block(Some(hw))).unwrap();
-        save_session(&conn, &block(Some(9999))).unwrap();
-        save_session(&conn, &block(None)).unwrap();
+        // a block from the old timer still counts toward its task; one for a task that is gone was kept, untied
+        let block = |task_id: Option<i64>| old_block(&conn, 0, 45 * 60, task_id);
+        block(Some(hw));
+        block(Some(9999));
+        block(None);
         assert_eq!(find(hw).unwrap().spent_min.round(), 45.0);
         assert_eq!(conn.query_row("SELECT count(*) FROM session WHERE task_id IS NULL", [], |r| r.get::<_, i64>(0)).unwrap(), 2);
-
-        // the task id makes the whole trip: into the Python timer with the start, back out with the finished block
-        let backend = Backend::default();
-        let start = json!({ "action": "start_focus", "focus_min": 25, "break_min": 5, "label": "HW3", "task_id": hw });
-        assert_eq!(sidecar_call(&backend, "timer", Some(start)).unwrap()["task_id"], hw);
-        let mut stopped = sidecar_call(&backend, "timer", Some(json!({ "action": "stop" }))).unwrap();
-        let finished: Vec<Session> = serde_json::from_value(stopped["sessions"].take()).unwrap();
-        assert_eq!(finished.iter().map(|s| s.task_id).collect::<Vec<_>>(), [Some(hw)]);
 
         // same due day and course number: suggested, and only then
         assert_eq!(find(hw).unwrap().same_as.map(|s| (s.id, s.title, s.source)), Some((canvas_hw, "Homework 3".into(), "canvas".into())));
@@ -1018,7 +953,7 @@ mod tests {
         assert!(find(essay).unwrap().soon); // the mark on its row stays
         // time spent on the task shrinks the work left, and two at once are counted
         conn.execute("UPDATE task SET reminded_at = '2020-01-01T00:00:00Z'", []).unwrap();
-        save_session(&conn, &block(Some(essay))).unwrap();
+        block(Some(essay));
         due_in("A very long title that would not fit in the pet's little speech bubble", 20, None);
         assert_eq!(
             take_reminder(&conn).unwrap().as_deref(),

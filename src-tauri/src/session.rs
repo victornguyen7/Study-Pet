@@ -1,44 +1,10 @@
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::db::{days_to_total, lock, save_day_total, save_session, setting, streak_input, Db, Session};
+use crate::db::{days_to_total, lock, save_day_total, setting, streak_input, Db};
 use crate::sidecar::{sidecar_call, Backend};
 
-// ---- Session timer: logic in backend/timer.py, storage and fan-out to the windows here ----
-
-pub(crate) fn timer_action(app: &AppHandle, params: Value) -> Result<Value, String> {
-    let mut state = sidecar_call(&app.state::<Backend>(), "timer", Some(params))?;
-    let sessions: Vec<Session> =
-        serde_json::from_value(state["sessions"].take()).map_err(|e| e.to_string())?;
-    if !sessions.is_empty() {
-        {
-            let db = app.state::<Db>();
-            let conn = lock(&db.0);
-            for s in &sessions {
-                save_session(&conn, s).map_err(|e| e.to_string())?;
-            }
-        }
-        streak_state(app)?;
-    }
-    app.emit("timer", &state).map_err(|e| e.to_string())?;
-    Ok(state)
-}
-
-/// `params` is `{ action: "start_focus" | "skip_break" | "resume" | "stop" | "tick", ...args }`.
-#[tauri::command(async)]
-pub(crate) fn timer(app: AppHandle, params: Value) -> Result<Value, String> {
-    // starting a focus block takes back "I'm relaxing", which would otherwise keep the keeper off
-    if params["action"] == "start_focus" {
-        let db = app.state::<Db>();
-        let conn = lock(&db.0);
-        if crate::modes::declared(&conn).map_err(|e| e.to_string())?.as_deref() == Some("relax") {
-            crate::modes::declare(&conn, None).map_err(|e| e.to_string())?;
-        }
-    }
-    timer_action(&app, params)
-}
-
-// ---- Sounds: a macOS system sound when a break starts and when the pet calls the user back ----
+// ---- Sounds: a macOS system sound when the pet suggests a break ----
 
 pub(crate) fn play_sound(app: &AppHandle, name: &str) {
     let off = setting(&lock(&app.state::<Db>().0), "sounds").ok().flatten().as_deref() == Some("0");

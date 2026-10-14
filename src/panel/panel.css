@@ -185,45 +185,9 @@ nav button[aria-current] {
   color: var(--ink);
 }
 
-/* ---- the tank ---- */
-
-.tank {
-  position: relative;
-  overflow: hidden;
-  min-height: 210px;
-  padding: 20px;
-  border-radius: 22px;
-  background: var(--surface);
-  display: grid;
-  align-content: center;
-}
-
-.level {
-  position: absolute;
-  inset: auto 0 0;
-  height: var(--level, 0%);
-  background: color-mix(in srgb, var(--pond) 42%, transparent);
-  border-top: 2px solid var(--pond);
-  transition: height 1s linear;
-}
-
-.tank > :not(.level) {
-  position: relative;
-  display: grid;
-  gap: 12px;
-}
-
 form {
   display: grid;
   gap: 12px;
-}
-
-#clock {
-  font-size: 64px;
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
 }
 
 /* ---- lists ---- */
@@ -294,8 +258,7 @@ summary h2 {
   margin-bottom: 4px;
 }
 
-/* a task's own start button, and the suggestion that it is the same as an imported one */
-#tasks .start,
+/* the suggestion that a typed task is the same as an imported one */
 #tasks .merge {
   padding: 1px 8px;
   font-size: 13px;
@@ -320,25 +283,6 @@ summary h2 {
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-}
-
-#task-pick {
-  max-width: 220px;
-  padding: 4px 8px;
-  border: 1.5px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  font: inherit;
-  color: inherit;
-}
-
-#working-on {
-  margin: 0;
-  font-weight: 600;
-}
-
-#finished {
-  margin-top: 10px;
 }
 
 #task-text {
@@ -599,10 +543,4 @@ summary h2 {
   padding: 8px 12px;
   border-radius: 10px;
   border: 1.5px solid #c2452d;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .level {
-    transition: none;
-  }
 }

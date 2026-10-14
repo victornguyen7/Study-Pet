@@ -311,28 +311,3 @@ pub(crate) fn keeper(app: AppHandle, personality: Option<String>, block: Option<
     app.emit("keeper", &state).map_err(|e| e.to_string())?;
     Ok(state)
 }
-
-// ---- S-7: study with no session running, and the pet offers to start one ----
-
-const OFFER_AFTER_SECS: i64 = 5 * 60;
-const OFFER_EVERY_SECS: i64 = 30 * 60;
-static LAST_OFFER: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
-
-/// Whether `day` (from label_day) ends in Study that has lasted 5 minutes and is still going at `now`.
-pub(crate) fn studying(day: &Value, now: i64) -> bool {
-    day["spans"].as_array().and_then(|spans| spans.last()).is_some_and(|last| {
-        let (start, end) = (last["start"].as_i64().unwrap_or(0), last["end"].as_i64().unwrap_or(0));
-        last["mode"] == "study" && now - end <= 60 && end - start >= OFFER_AFTER_SECS
-    })
-}
-
-/// The pet's offer, at most once in half an hour. Call it only while no session is running.
-pub(crate) fn offer(app: &AppHandle) -> Result<Option<String>, String> {
-    let now = chrono::Utc::now().timestamp();
-    let last = LAST_OFFER.load(std::sync::atomic::Ordering::Relaxed);
-    if now - last < OFFER_EVERY_SECS || !studying(&modes_day(app.clone(), None)?, now) {
-        return Ok(None);
-    }
-    LAST_OFFER.store(now, std::sync::atomic::Ordering::Relaxed);
-    Ok(Some("Looks like you're studying. Open the panel to start a focus block?".into()))
-}

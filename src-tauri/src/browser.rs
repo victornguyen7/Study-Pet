@@ -4,7 +4,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
@@ -18,10 +18,8 @@ use crate::db::{lock, Db};
 // page in front. Chrome starts a native-messaging host for it; that host is a two-line script that
 // hands the bytes to the socket below, so nothing is recorded unless this app is running.
 
-/// Two samples further apart than this are not joined: Chrome lost focus, the laptop slept, or a break came between.
+/// Two samples further apart than this are not joined: Chrome lost focus, or the laptop slept.
 pub(crate) const GAP_SECS: i64 = 15;
-/// C-4: set by the timer thread during a break; samples are dropped while it is set.
-pub(crate) static PAUSED: AtomicBool = AtomicBool::new(false);
 
 /// PR-1, PR-11: what each connected copy of the extension last said, by link: (when, private, audio).
 /// There is one copy per Chrome profile. A copy says "private" for an incognito window, a page showing
@@ -42,9 +40,9 @@ pub(crate) fn front_page(now: i64) -> Option<(String, String)> {
 static AWAY_UNTIL: AtomicI64 = AtomicI64::new(0);
 const AWAY_SECS: i64 = 15 * 60;
 
-/// C-4: nothing is noted during a break, or while the pet has been told to look away.
+/// Nothing is noted while the pet has been told to look away.
 pub(crate) fn paused(now: i64) -> bool {
-    PAUSED.load(Ordering::Relaxed) || now < AWAY_UNTIL.load(Ordering::Relaxed)
+    now < AWAY_UNTIL.load(Ordering::Relaxed)
 }
 
 /// With no key, click or pointer move for this long, nobody is taken to be at the laptop.
