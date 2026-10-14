@@ -79,7 +79,7 @@
         <img id="fire" src="/src/panel/fire.svg" alt="" width="39" height="48" />
         <div>
           <p><strong id="streak-days"></strong> day streak <span id="streak-stars"></span></p>
-          <progress id="streak-progress" aria-label="Today's focus toward your daily goal"></progress>
+          <progress id="streak-progress" aria-label="Today's study and work toward your daily goal"></progress>
           <p id="streak-line" class="muted"></p>
         </div>
       </section>
@@ -105,10 +105,6 @@
         <ul id="tasks" class="rows"></ul>
       </section>
 
-      <section>
-        <h2>Today's focus blocks</h2>
-        <ol id="blocks" class="rows"></ol>
-      </section>
     </main>
 
     <main id="wrapup" hidden>
@@ -116,13 +112,15 @@
       <p id="wrap-streak"></p>
       <section>
         <div class="row head">
-          <h2>Focus</h2>
-          <button class="refresh" aria-label="Refresh Focus">Refresh</button>
+          <h2>Study and work</h2>
+          <button class="refresh" aria-label="Refresh Study and work">Refresh</button>
         </div>
         <div id="heat"></div>
         <p class="muted heat-key">
-          Less <span class="l0"></span><span class="l1"></span><span class="l2"></span><span class="l3"></span><span class="l4"></span>
-          More · under 1 h, 1 to 2 h, 2 to 4 h, 4 h or more of focus. Click a day to see it below.
+          Study <span class="l1"></span><span class="l2"></span><span class="l3"></span><span class="l4"></span>
+          Work <span class="l1 work"></span><span class="l2 work"></span><span class="l3 work"></span><span class="l4 work"></span>
+          · under 1 h, 1 to 2 h, 2 to 4 h, 4 h or more. A day takes the colour of whichever had more time. Click a
+          day to see it below.
         </p>
       </section>
       <section>
@@ -161,7 +159,7 @@
       </section>
       <section>
         <h2>Streak</h2>
-        <label>A day counts at <input id="threshold" type="number" min="1" max="1440" required /> min of focus</label>
+        <label>A day counts at <input id="threshold" type="number" min="1" max="1440" required /> min of study or work</label>
       </section>
       <section>
         <h2>Sounds</h2>

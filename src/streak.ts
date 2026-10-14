@@ -6,7 +6,7 @@ export type StreakState = {
   days: number;
   today_minutes: number;
   today_counted: boolean;
-  threshold: number; // study minutes a day needs to count
+  threshold: number; // minutes of study and work a day needs to count
   freezes_left: number; // this month
   milestone: 0 | 7 | 30 | 100; // highest one reached
 };

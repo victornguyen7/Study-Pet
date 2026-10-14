@@ -109,6 +109,8 @@ pub(crate) fn is_private(conn: &Connection, key: &str) -> rusqlite::Result<bool>
 /// Saves an answer. A Private one also takes the name off what was already recorded: the app's past
 /// spans become "Private", and the site's pages are deleted.
 pub(crate) fn set_rule(conn: &Connection, key: &str, name: &str, mode: &str) -> rusqlite::Result<()> {
+    // every finished day is labeled again with the new answer (days_to_total in db.rs)
+    conn.execute("DELETE FROM day_total", [])?;
     conn.execute(
         "INSERT INTO app_rule (key, name, mode) VALUES (lower(?1), ?2, ?3) ON CONFLICT (key) DO UPDATE SET mode = ?3",
         (key, name, mode),
@@ -117,6 +119,13 @@ pub(crate) fn set_rule(conn: &Connection, key: &str, name: &str, mode: &str) -> 
         conn.execute("UPDATE app_span SET app = 'Private', bundle_id = NULL WHERE lower(coalesce(bundle_id, app)) = lower(?1)", [key])?;
         conn.execute("DELETE FROM activity_span WHERE lower(domain) = lower(?1)", [key])?;
     }
+    Ok(())
+}
+
+/// Forgets an answer, so the pet may ask again. The saved day totals go, as in set_rule.
+pub(crate) fn forget_rule(conn: &Connection, key: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM day_total", [])?;
+    conn.execute("DELETE FROM app_rule WHERE key = ?1", [key])?;
     Ok(())
 }
 
@@ -256,7 +265,7 @@ pub(crate) fn learned(db: State<Db>, key: Option<String>, name: Option<String>, 
     let conn = lock(&db.0);
     if let (Some(key), Some(mode)) = (key, mode) {
         if mode.is_empty() {
-            conn.execute("DELETE FROM app_rule WHERE key = ?1", [&key]).map(drop)
+            forget_rule(&conn, &key)
         } else {
             set_rule(&conn, &key, name.as_deref().unwrap_or(&key), &mode)
         }

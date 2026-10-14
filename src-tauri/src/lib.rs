@@ -181,7 +181,7 @@ pub fn run() {
             db::list_presets,
             db::add_preset,
             db::delete_preset,
-            db::day,
+            session::day,
             session::timer,
             session::streak,
             session::set_streak_threshold,
@@ -227,7 +227,7 @@ pub fn run() {
 mod tests {
     use super::*;
     use serde_json::Value;
-    use db::{day_data, save_session, setting, streak_input, Session};
+    use db::{save_session, setting, streak_input, Session};
     use sidecar::{call, sidecar_call, spawn_sidecar};
     use feeds::*;
     use keychain::{keychain_delete, keychain_get, keychain_set};
@@ -784,25 +784,72 @@ mod tests {
     }
 
     #[test]
-    fn streak_counts_a_day_with_enough_study() {
+    fn minutes_per_day_join_old_blocks_and_recorded_time() {
+        use db::{days_to_total, save_day_total};
         let conn = Connection::open_in_memory().unwrap();
         init_db(&conn).unwrap();
-        // starts now, so it lands on today whatever the local time is
-        let now = chrono::Utc::now().timestamp() as f64;
-        let s = Session { started_at: now, ended_at: now + 30.0 * 60.0, planned_min: 30.0, break_min: 5.0, label: None, task_id: None };
-        save_session(&conn, &s).unwrap();
+        // a new database starts counting recorded time today
+        let today: String = conn.query_row("SELECT date('now', 'localtime')", [], |r| r.get(0)).unwrap();
+        assert_eq!(setting(&conn, "auto_since").unwrap().as_deref(), Some(today.as_str()));
+        // here the switch was three days ago
+        conn.execute("UPDATE setting SET value = date('now', 'localtime', '-3 days') WHERE key = 'auto_since'", []).unwrap();
+        let day = |back: i64| -> String {
+            conn.query_row("SELECT date('now', 'localtime', ?1)", [format!("-{back} days")], |r| r.get(0)).unwrap()
+        };
+        // local noon `back` days ago and half an hour later, as the UTC text the tables hold
+        let noon = |back: i64| -> (String, String) {
+            conn.query_row(
+                "SELECT strftime('%Y-%m-%dT%H:%M:%SZ', noon), strftime('%Y-%m-%dT%H:%M:%SZ', noon, '+30 minutes')
+                 FROM (SELECT datetime(date('now', 'localtime', ?1) || ' 12:00:00', 'utc') AS noon)",
+                [format!("-{back} days")],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap()
+        };
+        let block = |back: i64| conn.execute("INSERT INTO session (started_at, ended_at, planned_min, break_min) VALUES (?1, ?2, 25, 5)", noon(back)).unwrap();
+        let app = |back: i64| conn.execute("INSERT INTO app_span (started_at, ended_at, app) VALUES (?1, ?2, 'Preview')", noon(back)).unwrap();
 
-        let day = day_data(&conn).unwrap();
-        assert_eq!(day["sessions"][0]["seconds"], 1800);
-        assert_eq!(day["minutes"][day["today"].as_str().unwrap()], 30.0);
+        block(5); // before the switch: its 30 minutes count, as Study
+        block(2); // after it: a block no longer counts
+        app(5); // before the switch: never labeled
+        app(2);
+        app(1);
+        app(0); // today is labeled live, never saved
+        assert_eq!(days_to_total(&conn).unwrap(), [day(2), day(1)]);
+        // totals as the sidecar sends them: seconds per mode, sometimes as floats
+        save_day_total(&conn, &day(2), &json!({ "study": 600, "work": 1800.0, "relax": 9999 })).unwrap();
+        save_day_total(&conn, &day(1), &json!({ "relax": 500 })).unwrap(); // a day of Relax only
+        assert!(days_to_total(&conn).unwrap().is_empty()); // neither is labeled again
 
+        let input = streak_input(&conn, &json!({ "study": 1200.0, "work": 300 })).unwrap();
+        assert_eq!(
+            input["minutes"],
+            json!({ (day(5)): 30.0, (day(2)): 40.0, (day(0)): 25.0 })
+        );
+        assert_eq!(input["modes"], json!({ (day(5)): "study", (day(2)): "work", (day(0)): "study" }));
+        assert_eq!((input["today"].as_str(), input["threshold"].as_f64()), (Some(today.as_str()), Some(25.0)));
+        // a tie is Study; nothing recorded today is no entry at all; a stale row for today is not read
+        assert_eq!(streak_input(&conn, &json!({ "study": 300, "work": 300 })).unwrap()["modes"][&today], "study");
+        save_day_total(&conn, &today, &json!({ "study": 99999 })).unwrap();
+        for nothing in [json!({}), json!(null), json!({ "relax": 4000, "unknown": 50 })] {
+            assert_eq!(streak_input(&conn, &nothing).unwrap()["minutes"].get(&today), None, "{nothing}");
+        }
+
+        // the streak rule takes the minutes as they are
+        let mut for_streak = input.clone();
+        for_streak.as_object_mut().unwrap().remove("modes");
         let mut sidecar = spawn_sidecar().unwrap();
-        let state = call(&mut sidecar, "streak", Some(streak_input(&conn).unwrap())).unwrap();
-        assert_eq!((&state["days"], &state["today_minutes"]), (&json!(1), &json!(30)));
+        let state = call(&mut sidecar, "streak", Some(for_streak)).unwrap();
+        assert_eq!((&state["today_minutes"], &state["today_counted"]), (&json!(25), &json!(true)));
 
-        conn.execute("INSERT INTO setting VALUES ('streak_threshold_min', 45)", []).unwrap();
-        let state = call(&mut sidecar, "streak", Some(streak_input(&conn).unwrap())).unwrap();
-        assert_eq!(state["days"], 0);
+        // an answer about an app, or forgetting one, throws the saved totals away so they are rebuilt
+        let saved = || conn.query_row("SELECT count(*) FROM day_total", [], |r| r.get::<_, i64>(0)).unwrap();
+        assert_eq!(saved(), 3);
+        modes::set_rule(&conn, "preview", "Preview", "study").unwrap();
+        assert_eq!((saved(), days_to_total(&conn).unwrap()), (0, vec![day(2), day(1)]));
+        save_day_total(&conn, &day(2), &json!({ "study": 1800 })).unwrap();
+        modes::forget_rule(&conn, "preview").unwrap();
+        assert_eq!((saved(), modes::rules(&conn).unwrap().len()), (0, 0));
     }
 
     #[test]

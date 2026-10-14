@@ -101,7 +101,14 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             name TEXT NOT NULL,       -- as shown to the user
             mode TEXT CHECK (mode IN ('study', 'work', 'relax', 'private')), -- NULL: asked, not answered yet
             asked_at TEXT             -- when the pet brought it up; NULL if the user answered unasked
-        );",
+        );
+        CREATE TABLE IF NOT EXISTS day_total (
+            day TEXT PRIMARY KEY,        -- a finished local day, YYYY-MM-DD
+            study_secs INTEGER NOT NULL, -- as backend/modes.py labeled it; every row goes when a rule changes
+            work_secs INTEGER NOT NULL
+        );
+        -- the first day recorded time counts toward the streak; earlier days keep their focus blocks
+        INSERT OR IGNORE INTO setting (key, value) VALUES ('auto_since', date('now', 'localtime'));",
     )?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if version < 1 {
@@ -193,51 +200,64 @@ pub(crate) fn save_session(conn: &Connection, s: &Session) -> rusqlite::Result<(
     Ok(())
 }
 
-/// What backend/streaks.py needs: study minutes per local day, today's date, the threshold.
-// ponytail: a block that runs past midnight counts wholly toward the day it started.
-pub(crate) fn streak_input(conn: &Connection) -> rusqlite::Result<Value> {
-    let mut minutes = serde_json::Map::new();
+/// Finished days since the switch that have something noted and no saved total yet, oldest first.
+pub(crate) fn days_to_total(conn: &Connection) -> rusqlite::Result<Vec<String>> {
+    conn.prepare(
+        "SELECT DISTINCT date(started_at, 'localtime') AS d
+         FROM (SELECT started_at FROM app_span UNION ALL SELECT started_at FROM activity_span)
+         WHERE d >= (SELECT value FROM setting WHERE key = 'auto_since') AND d < date('now', 'localtime')
+           AND d NOT IN (SELECT day FROM day_total)
+         ORDER BY 1",
+    )?
+    .query_map([], |r| r.get(0))?
+    .collect()
+}
+
+/// Saves one finished day from label_day's `totals` (seconds per mode). A day with no Study or Work
+/// is saved too, as zeros, so it is not labeled again.
+pub(crate) fn save_day_total(conn: &Connection, day: &str, totals: &Value) -> rusqlite::Result<()> {
+    let secs = |mode: &str| totals[mode].as_f64().unwrap_or(0.0) as i64;
+    conn.execute(
+        "INSERT OR REPLACE INTO day_total (day, study_secs, work_secs) VALUES (?1, ?2, ?3)",
+        (day, secs("study"), secs("work")),
+    )?;
+    Ok(())
+}
+
+/// What backend/streaks.py and the heatmap need: recorded minutes per local day, each day's larger
+/// mode, today's date, the threshold. A day before the switch has its focus blocks, as Study; a
+/// finished day since has its row in day_total; today is `today_totals`, label_day's totals for it.
+// ponytail: a block or a span that runs past midnight counts wholly toward the day it started.
+pub(crate) fn streak_input(conn: &Connection, today_totals: &Value) -> rusqlite::Result<Value> {
+    let (mut minutes, mut modes) = (serde_json::Map::new(), serde_json::Map::new());
     let mut stmt = conn.prepare(
-        "SELECT date(started_at, 'localtime'), sum(unixepoch(ended_at) - unixepoch(started_at)) / 60.0
-         FROM session WHERE ended_at IS NOT NULL GROUP BY 1",
+        "SELECT date(started_at, 'localtime'), sum(unixepoch(ended_at) - unixepoch(started_at)) / 60.0, 'study'
+         FROM session
+         WHERE ended_at IS NOT NULL AND date(started_at, 'localtime') < (SELECT value FROM setting WHERE key = 'auto_since')
+         GROUP BY 1
+         UNION ALL
+         SELECT day, (study_secs + work_secs) / 60.0, iif(work_secs > study_secs, 'work', 'study')
+         FROM day_total
+         WHERE day >= (SELECT value FROM setting WHERE key = 'auto_since') AND day < date('now', 'localtime')
+           AND study_secs + work_secs > 0",
     )?;
     let mut rows = stmt.query([])?;
     while let Some(row) = rows.next()? {
-        minutes.insert(row.get(0)?, json!(row.get::<_, f64>(1)?));
+        let day: String = row.get(0)?;
+        minutes.insert(day.clone(), json!(row.get::<_, f64>(1)?));
+        modes.insert(day, json!(row.get::<_, String>(2)?));
     }
     let today: String = conn.query_row("SELECT date('now', 'localtime')", [], |r| r.get(0))?;
+    // as_f64: a block still running reaches label_day as a float time
+    let secs = |mode: &str| today_totals[mode].as_f64().unwrap_or(0.0);
+    if secs("study") + secs("work") > 0.0 {
+        minutes.insert(today.clone(), json!((secs("study") + secs("work")) / 60.0));
+        modes.insert(today.clone(), json!(if secs("work") > secs("study") { "work" } else { "study" }));
+    }
     let threshold: Option<f64> = conn
         .query_row("SELECT value FROM setting WHERE key = 'streak_threshold_min'", [], |r| r.get(0))
         .optional()?;
-    Ok(json!({ "minutes": minutes, "today": today, "threshold": threshold.unwrap_or(25.0) }))
-}
-
-/// Everything the panel shows about the day: today's focus blocks plus the streak input
-/// (minutes per day, for the 7-day strip).
-pub(crate) fn day_data(conn: &Connection) -> rusqlite::Result<Value> {
-    let mut stmt = conn.prepare(
-        "SELECT unixepoch(started_at), unixepoch(ended_at) - unixepoch(started_at), planned_min
-         FROM session
-         WHERE ended_at IS NOT NULL AND date(started_at, 'localtime') = date('now', 'localtime')
-         ORDER BY started_at",
-    )?;
-    let sessions = stmt
-        .query_map([], |r| {
-            Ok(json!({
-                "started": r.get::<_, i64>(0)?,
-                "seconds": r.get::<_, i64>(1)?,
-                "planned_min": r.get::<_, f64>(2)?,
-            }))
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    let mut data = streak_input(conn)?;
-    data["sessions"] = json!(sessions);
-    Ok(data)
-}
-
-#[tauri::command]
-pub(crate) fn day(db: State<Db>) -> Result<Value, String> {
-    day_data(&lock(&db.0)).map_err(|e| e.to_string())
+    Ok(json!({ "minutes": minutes, "modes": modes, "today": today, "threshold": threshold.unwrap_or(25.0) }))
 }
 
 /// Held for a whole sync, so two never overlap and a feed is not changed in the middle of one.

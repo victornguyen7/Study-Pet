@@ -4,10 +4,10 @@ import { onStreak, type StreakState } from "../streak";
 import { onTimer, timer } from "../timer";
 
 type Preset = { id: number; name: string; focus_min: number; break_min: number };
-// Mirrors day_data() in src-tauri/src/db.rs
+// Mirrors streak_input() in src-tauri/src/db.rs
 type Day = {
-  sessions: { started: number; seconds: number; planned_min: number }[]; // today's focus blocks
-  minutes: Record<string, number>; // "YYYY-MM-DD" -> focus minutes
+  minutes: Record<string, number>; // "YYYY-MM-DD" -> minutes of study and work
+  modes: Record<string, "study" | "work">; // which of the two had more of that day
   today: string;
   threshold: number;
 };
@@ -592,7 +592,7 @@ async function loadRecap() {
 for (const button of document.querySelectorAll<HTMLButtonElement>(".refresh"))
   button.onclick = () => run(() => invoke("streak"));
 
-// R-1: about four months of days, a column per week from Monday, shaded by hours of focus
+// R-1: about four months of days, a column per week from Monday, shaded by hours of study and work
 const HEAT_WEEKS = 18;
 const heatLevel = (minutes: number) => (minutes <= 0 ? 0 : minutes < 60 ? 1 : minutes < 120 ? 2 : minutes < 240 ? 3 : 4);
 // R-2: picking a day asks for the streak again, whose answer redraws the whole view (loadDay)
@@ -611,10 +611,12 @@ function showHeatmap(day: Day) {
   for (; d <= today; d.setDate(d.getDate() + 1)) {
     const date = d.toLocaleDateString("en-CA"); // "YYYY-MM-DD"
     const minutes = day.minutes[date] ?? 0;
+    const mode = day.modes[date] ?? "study";
     const label = `${d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}: ${
-      minutes ? duration(minutes) : "no focus"
+      minutes ? `${duration(minutes)}, mostly ${mode}` : "nothing recorded"
     }`;
-    const cell = el("button", "", `l${heatLevel(minutes)}`);
+    // blue for a day of mostly Study, orange for mostly Work (panel.css)
+    const cell = el("button", "", `l${heatLevel(minutes)} ${mode}`);
     cell.title = label;
     cell.setAttribute("aria-label", label);
     cell.setAttribute("aria-pressed", String(date === (recapDay ?? day.today)));
@@ -626,17 +628,6 @@ function showHeatmap(day: Day) {
 
 async function loadDay(streak: StreakState) {
   const day = await invoke<Day>("day");
-
-  $("blocks").replaceChildren(
-    ...day.sessions.map((s) => {
-      const li = el("li");
-      const time = new Date(s.started * 1000).toLocaleTimeString([], { timeStyle: "short" });
-      li.append(el("span", time), el("span", duration(s.seconds / 60)));
-      return li;
-    }),
-  );
-  if (!day.sessions.length)
-    $("blocks").append(el("li", "No focus blocks yet today. Start one above.", "empty"));
 
   const left = Math.ceil(streak.threshold - (day.minutes[day.today] ?? 0));
   const goal = streak.today_counted
@@ -652,18 +643,19 @@ async function loadDay(streak: StreakState) {
   progress.value = Math.min(day.minutes[day.today] ?? 0, streak.threshold);
   $("streak-line").textContent = `${goal} ${plural(streak.freezes_left, "freeze")} left this month.`;
 
-  const todayLine = day.sessions.length
-    ? `You focused for ${duration(day.minutes[day.today] ?? 0)} across ${plural(day.sessions.length, "block")} today.`
-    : "Nothing logged today yet. A focus block of any length counts.";
-  // an earlier day picked in the heatmap: its focus, and its name over the recap
+  const now = day.minutes[day.today] ?? 0;
+  const todayLine = now
+    ? `You studied or worked for ${duration(now)} today.`
+    : "Nothing recorded today yet. The pet counts study and work time by itself.";
+  // an earlier day picked in the heatmap: its time, and its name over the recap
   const when =
     recapDay && new Date(`${recapDay}T12:00:00`).toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
   const then = recapDay ? (day.minutes[recapDay] ?? 0) : 0;
   $("wrap-total").textContent = !recapDay
     ? todayLine
     : then
-      ? `You focused for ${duration(then)} on ${when}.`
-      : `No focus logged on ${when}.`;
+      ? `You studied or worked for ${duration(then)} on ${when}.`
+      : `Nothing recorded on ${when}.`;
   $("recap-title").textContent = when || "Today";
   $("back-today").hidden = !recapDay;
   $("wrap-streak").textContent =

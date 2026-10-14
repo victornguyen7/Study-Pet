@@ -28,7 +28,7 @@
 
     npm run build
     cd src-tauri && cargo test
-    backend/.venv/bin/python -m unittest discover -s backend/tests -t .
+    backend/.venv/bin/python -m unittest backend.tests.test_timer backend.tests.test_streaks backend.tests.test_tasks backend.tests.test_feeds backend.tests.test_fetcher backend.tests.test_modes backend.tests.test_drift
 
 ## Review Focus
 
@@ -638,8 +638,8 @@ In `src/panel/panel.css`, in `:root` after `--heat-4: #104281;` add:
 
 ```css
   /* the same four steps for a day of mostly Work, around --work */
-  --heat-work-1: #f4b393;
-  --heat-work-2: #ee8a5f;
+  --heat-work-1: #efa07a;
+  --heat-work-2: #e97843;
   --heat-work-3: #c9501f;
   --heat-work-4: #8a3210;
 ```

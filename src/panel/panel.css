@@ -17,6 +17,11 @@
   --heat-2: #5598e7;
   --heat-3: #256abf;
   --heat-4: #104281;
+  /* the same four steps for a day of mostly Work, around --work */
+  --heat-work-1: #efa07a;
+  --heat-work-2: #e97843;
+  --heat-work-3: #c9501f;
+  --heat-work-4: #8a3210;
   color-scheme: light dark;
 }
 
@@ -35,6 +40,10 @@
     --heat-2: #3987e5;
     --heat-3: #6da7ec;
     --heat-4: #b7d3f6;
+    --heat-work-1: #a8431a;
+    --heat-work-2: #d95926;
+    --heat-work-3: #ea8a61;
+    --heat-work-4: #f6c4ad;
   }
 }
 
@@ -567,6 +576,22 @@ summary h2 {
 
 .l4 {
   background: var(--heat-4);
+}
+
+.work.l1 {
+  background: var(--heat-work-1);
+}
+
+.work.l2 {
+  background: var(--heat-work-2);
+}
+
+.work.l3 {
+  background: var(--heat-work-3);
+}
+
+.work.l4 {
+  background: var(--heat-work-4);
 }
 
 #error:not(:empty) {
