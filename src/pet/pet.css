@@ -90,7 +90,7 @@ body {
   letter-spacing: 2px;
 }
 
-/* ---- States, set as classes by main.ts. Idle, Watching and Break are the plain slime above. ---- */
+/* ---- States, set as classes by main.ts. Idle and Watching are the plain slime above. ---- */
 
 /* Relaxing: something Relax is in front and no focus block runs. The slime lies down, eyes shut.
    `scale`, `rotate` and `translate` are used on their own so they add to each other and to the splash. */

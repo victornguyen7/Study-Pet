@@ -55,7 +55,7 @@ A typical day touches every feature once.
 
 ## Pet, sessions and breaks
 
-The pet is an always-on-top character whose eyes always show whether it is watching. Its states are Idle, Watching, Break, Relaxing, Headphones, Nudging and Happy.
+The pet is an always-on-top character whose eyes always show whether it is watching. Its states are Idle, Watching, Relaxing, Headphones, Nudging and Happy.
 
 | ID | Requirement | Status |
 | --- | --- | --- |

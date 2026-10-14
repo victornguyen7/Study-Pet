@@ -1,6 +1,6 @@
 # Automatic recording replaces the focus block
 
-Date: 2026-10-13. Status: design, approved in chat, not built.
+Date: 2026-10-13. Status: built 2026-10-13. One change from this design: the break line goes to the pet as its own `break` event, not a `reminder`, so it can leave the bubble after a minute.
 
 ## Why
 
