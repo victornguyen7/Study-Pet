@@ -40,9 +40,12 @@ fn day_input(app: &AppHandle) -> Result<Value, String> {
     let db = app.state::<Db>();
     let days = days_to_total(&lock(&db.0)).map_err(|e| e.to_string())?;
     for day in days {
-        // modes_day takes the database lock itself, so none is held across it
-        let labeled = crate::modes::modes_day(app.clone(), Some(day.clone()))?;
-        save_day_total(&lock(&db.0), &day, &labeled["totals"]).map_err(|e| e.to_string())?;
+        // modes_day takes the database lock itself, so none is held across it. A day that fails
+        // is skipped, not saved, so it counts as 0 for now and is tried again next minute.
+        match crate::modes::modes_day(app.clone(), Some(day.clone())) {
+            Ok(labeled) => save_day_total(&lock(&db.0), &day, &labeled["totals"]).map_err(|e| e.to_string())?,
+            Err(e) => eprintln!("labeling {day} failed: {e}"),
+        }
     }
     let today = crate::modes::modes_day(app.clone(), None)?;
     let input = streak_input(&lock(&db.0), &today["totals"]).map_err(|e| e.to_string())?;

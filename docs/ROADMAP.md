@@ -174,7 +174,7 @@ Spec: `docs/superpowers/specs/2026-10-13-auto-record-design.md`. Plan: `docs/sup
 - [x] The break suggestion and its setting
 - [x] The timer, presets, breaks and task Start removed from the core and the panel
 - [ ] Look at it in the running dev app: Today without the tank, the heatmap in light and dark, the break length in Settings (2026-10-13: the dev app was run for 95 seconds and its log read, with no error; the windows were not looked at)
-- [ ] By hand: 5 minutes of study opens the pet's eyes, a Relax site then gets a glance and a line, coming back gets "Welcome back", and the break line comes with its sound
+- [x] By hand: 5 minutes of study opens the pet's eyes, a Relax site then gets a glance and a line, coming back gets "Welcome back", and the break line comes with its sound (tried by the user in the everyday app on 2026-10-14; it worked)
 - [x] Remove `timer` and `drift` from the sidecar, and `backend/timer.py` (the plan's Task 6): done 2026-10-13 at the user's request
 - [x] Rebuild and reinstall the everyday app, backing up `pet.db` first (`KNOWN_ISSUES.md`, item 34): done 2026-10-13 at 20:45 from commit `54f8d20`, signed, with the backup `pet.db.bak-2026-10-13-2039`. It started; its 40 focus blocks and 64 tasks were still there, and `auto_since` was set to 2026-10-13. Its windows have not been looked at yet
 
