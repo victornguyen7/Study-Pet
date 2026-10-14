@@ -164,6 +164,19 @@ Phases 1 to 3 are built and in daily use. On 2026-10-11 the plan changed: the kn
 
 **Accepted limits:** an answer given today relabels earlier days; days before 2026-10-07 have focus hours and an empty recap; a name worked out from an address can be clumsy.
 
+## 2026-10-13 · Automatic recording
+
+Spec: `docs/superpowers/specs/2026-10-13-auto-record-design.md`. Plan: `docs/superpowers/plans/2026-10-13-auto-record.md`.
+
+- [x] The keeper turns itself on and off (`Keeper`, `watch`), with tests
+- [x] Minutes per day from recorded Study and Work time (`day_total`, `auto_since`), with a test
+- [x] Two-colour heatmap; the orange ramp checked with the validator
+- [x] The break suggestion and its setting
+- [x] The timer, presets, breaks and task Start removed from the core and the panel
+- [ ] Look at it in the running dev app: Today without the tank, the heatmap in light and dark, the break length in Settings (2026-10-13: the dev app was run for 95 seconds and its log read, with no error; the windows were not looked at)
+- [ ] By hand: 5 minutes of study opens the pet's eyes, a Relax site then gets a glance and a line, coming back gets "Welcome back", and the break line comes with its sound
+- [ ] Remove `timer` and `drift` from the sidecar, and `backend/timer.py`, when the everyday app is next reinstalled (the plan's Task 6)
+
 ## Maybe later
 
 Built only if daily use asks for it. None of these is planned.

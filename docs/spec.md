@@ -38,20 +38,20 @@ The first user is a university student who studies in short, scattered sessions 
 | Drift into doomscrolling | Blockers feel punishing and get switched off | Nudges with humor and rewards coming back |
 | Study, work and rest blur together | No record of where the day went | Labels time automatically and shows the day's balance |
 | Can't say where the day went | Time is spread across apps and tabs | One total per app and site, for any day |
-| Motivation fades | Streak apps reset after one missed day | Uses forgiving streaks, a focus heatmap and a pet that grows |
+| Motivation fades | Streak apps reset after one missed day | Uses forgiving streaks, a heatmap of study and work, and a pet that grows |
 
 ## A day with the pet
 
 A typical day touches every feature once.
 
 1. **Morning:** the pet shows Today. It lists classes from the calendar, a Canvas assignment due Friday, a task added last night and one leftover.
-2. **First session:** the user picks "STAT 310 HW3," sets 50 minutes, and the pet opens its eyes.
+2. **First hour:** the user opens the STAT 310 homework. Nothing is started. After 5 minutes of study the pet opens its eyes.
 3. **Studying:** Spotify plays in the background, so the pet wears headphones.
 4. **Drift:** the user opens Reels. The pet glances, then speaks, then sits in the middle of the screen. The user comes back and the pet perks up.
-5. **Break:** noting pauses. The pet says to stand up, then calls the user back when the break ends.
-6. **Afternoon:** a 30-minute session between classes, then an hour of internship applications labeled Work.
+5. **Break:** after 50 minutes the pet suggests a break. The user steps away, and the pet stops watching until they are back at work.
+6. **Afternoon:** 30 minutes of study between classes, then an hour of internship applications labeled Work.
 7. **Evening:** a show plays. The pet lies down and stays quiet.
-8. **Wrap-up:** the user opens Wrap up. It shows the focus heatmap, the day's hours of Study, Work and Relax, the time in each app and site, and the streak. A click on yesterday in the heatmap shows yesterday instead.
+8. **Wrap-up:** the user opens Wrap up. It shows the heatmap of study and work, the day's hours of Study, Work and Relax, the time in each app and site, and the streak. A click on yesterday in the heatmap shows yesterday instead.
 
 ## Pet, sessions and breaks
 
@@ -60,16 +60,18 @@ The pet is an always-on-top character whose eyes always show whether it is watch
 | ID | Requirement | Status |
 | --- | --- | --- |
 | P-1 | The pet lives in a transparent, always-on-top window. The user can drag it anywhere and hide it with one shortcut. | Built |
-| P-2 | Eyes are open only while a focus block runs and the pet is watching, and closed in every other state. | Built |
-| P-3 | Clicking the pet opens a panel: Today list, start session, wrap up, settings. | Built |
+| P-2 | Eyes are open only while the focus keeper is on and the pet is watching, and closed in every other state. | Built |
+| P-3 | Clicking the pet opens a panel: Today list, wrap up, settings. | Built |
 | P-4 | The user can type quick commands, such as "start 50 minutes" or "I'm relaxing." | Maybe later |
-| S-1 | The user sets focus and break length per session, with saved presets such as 25/5 and 50/10. | Built |
-| S-2 | A session can be tied to a task from the list, or left untagged. | Built |
-| S-3 | Breaks pause noting and nudges automatically. | Built |
-| S-4 | When a break ends, the pet calls the user back, and repeats once after 2 minutes. | Built |
-| S-5 | After 3 skipped breaks in a row, the pet suggests a real break. | Built |
-| S-6 | Sessions of any length count toward the day. There is no per-session minimum. | Built |
-| S-7 | If study is detected with no session running, the pet offers to start one. | Built |
+| S-1 | The user sets focus and break length per session, with saved presets such as 25/5 and 50/10. | Removed 2026-10-13: replaced by automatic recording |
+| S-2 | A session can be tied to a task from the list, or left untagged. | Removed 2026-10-13: replaced by automatic recording |
+| S-3 | Breaks pause noting and nudges automatically. | Removed 2026-10-13: replaced by automatic recording |
+| S-4 | When a break ends, the pet calls the user back, and repeats once after 2 minutes. | Removed 2026-10-13: replaced by automatic recording |
+| S-5 | After 3 skipped breaks in a row, the pet suggests a real break. | Removed 2026-10-13: replaced by automatic recording |
+| S-6 | All Study and Work time counts toward the day. There is no minimum stretch. | Built |
+| S-7 | If study is detected with no session running, the pet offers to start one. | Removed 2026-10-13: replaced by automatic recording |
+| S-8 | The pet counts Study and Work time by itself, from the labels in "Activity modes". There is nothing to start. | Built |
+| S-9 | After a run of study or work (50 minutes by default, set in Settings, 0 for never), the pet suggests a break once, with a sound. | Built |
 
 ## Activity modes and background audio
 
@@ -80,7 +82,8 @@ Every stretch of time gets one label: Study, Work, Relax or Private. The label i
 1. The user's own declaration, such as "Right now I'm relaxing." This always wins.
 2. A learned rule for this app or site from an earlier answer.
 3. The app or site category. Canvas means Study; Steam means Relax.
-4. Context: a running focus block.
+
+An app or site with none of these has no mode, and its time is "unknown" until the user answers. (Until 2026-10-13 an unknown app inside a focus block was taken as Study; that still holds for the recap of an earlier day.)
 
 **Labeling rules**
 
@@ -91,14 +94,14 @@ Every stretch of time gets one label: Study, Work, Relax or Private. The label i
 |  | Study | Work | Relax | Private |
 | --- | --- | --- | --- | --- |
 | Pet behavior | Focused, watching | Busy, supportive | Lies down, quiet | Eyes closed |
-| Focus keeper (inside a focus block) | On | On | Off | Off |
+| Turns the focus keeper on | Yes | Yes | No | No |
 | What is kept | Name and time | Name and time | Name and time | Time only |
-| Counts toward streak | Focus blocks only | Focus blocks only | No | No |
+| Counts toward streak | Yes | Yes | No | No |
 
 **Background audio**
 
 - Music apps and sites such as Spotify, Apple Music, SoundCloud and YouTube Music are background-only. They never change the mode and the pet never asks about them.
-- In front during a focus block, a music app or site has a 60-second grace period, for example to skip a song. After that it counts as drift.
+- In front while the focus keeper is on, a music app or site has a 60-second grace period, for example to skip a song. After that it counts as drift.
 - The pet logs only that sound was on, never what was playing. It wears headphones while sound plays.
 
 ## What the pet notes
@@ -110,7 +113,7 @@ The pet checks the front app every 5 seconds and keeps its name and the time. Fo
 | C-1 | Every 5 s, note the front app, plus the page in front from the browser extension. The window title is not read. | Built |
 | C-2 | The privacy gate runs first. A Private app, site or window is counted as "Private" time with no name. | Built |
 | C-3 | An app or site nobody has answered for is noted by name and time only, and asked about once. | Built |
-| C-4 | Noting pauses during breaks, when the pet is told to look away, and after 5 minutes with nobody at the keyboard. | Built |
+| C-4 | Noting pauses when the pet is told to look away, and after 5 minutes with nobody at the keyboard. | Built |
 
 ## Wrap up and recap
 
@@ -118,7 +121,7 @@ The Wrap up view answers "where did the day go?" for today or any earlier day. E
 
 | ID | Requirement | Status |
 | --- | --- | --- |
-| R-1 | **Focus heatmap.** A grid of days covering about the last four months, each day shaded by its hours of focus: none, under 1 h, 1 to 2 h, 2 to 4 h, 4 h or more. Hovering a day shows its date and hours. It replaces the "Last 7 days" strip. | Built |
+| R-1 | **Heatmap.** A grid of days covering about the last four months, each day shaded by its hours of Study and Work: none, under 1 h, 1 to 2 h, 2 to 4 h, 4 h or more. A day with more Study is blue and one with more Work is orange; a tie is blue. Hovering a day shows its date, hours and larger mode. It replaces the "Last 7 days" strip. | Built |
 | R-2 | **Any day.** Clicking a day in the heatmap shows that day's recap (R-3 and R-4) in place of today's. Today is shown when the view opens, and one click goes back to it. | Built |
 | R-3 | **Recap by mode.** One bar split into Study, Work, Relax, Private and unknown time, with the hours of each beside it. | Built |
 | R-4 | **One list of apps and sites.** A single total per app and per site for the day, longest first. The browser's own row counts only the time not already listed under a site, so no time is counted twice. The list of stretches with times of day is removed. | Built |
@@ -137,15 +140,16 @@ The Wrap up view answers "where did the day go?" for today or any earlier day. E
 
 ## Streaks
 
-The streak counts days with at least 25 minutes of focus.
+The streak counts days with at least 25 minutes of Study and Work, as the pet recorded them.
 
-- A day counts at 25 minutes of focus or more. The threshold is adjustable.
+- A day counts at 25 minutes of Study and Work or more. The threshold is adjustable.
+- Days before 2026-10-13 keep the minutes of their focus blocks.
 - Two streak freezes a month protect against one bad day.
 - The pet changes at streak milestones: 7, 30 and 100 days.
 
 ## Focus keeper
 
-Inside a focus block, the pet notices drift and escalates gently. It never shames the user, and it is silent outside a block and in Relax mode.
+The keeper turns itself on after 5 minutes of Study or Work. While it is on, the pet notices drift and escalates gently. It turns off after 15 minutes of Relax in a row, after 5 minutes away from the laptop, and when the user says they are relaxing. It never shames the user, and it is silent while it is off.
 
 **What counts as drift**
 
@@ -157,14 +161,14 @@ Inside a focus block, the pet notices drift and escalates gently. It never shame
 | Step | After | What the pet does |
 | --- | --- | --- |
 | 1 | 30 s of drift | Glances at the user |
-| 2 | 2 min | Speech bubble about the time, the site or the task |
+| 2 | 2 min | Speech bubble about the time and the site |
 | 3 | 5 min | Moves to the middle of the screen and sits there |
 | 4 | 10 min, opt-in only | Blocks the site for 5 minutes (Chrome only) |
 
 **Tone rules**
 
 - The user picks a personality: Gentle, Sassy or Roast.
-- Lines mention time, the site or the task. They never comment on the user's worth, intelligence or appearance.
+- Lines mention time and the site. They never comment on the user's worth, intelligence or appearance.
 - Coming back is always rewarded: the pet celebrates the return.
 
 ## Daily to-do list and integrations
@@ -196,14 +200,14 @@ The pet owns one to-do list. Other apps are read-only feeds, and nothing is ever
 - Every imported item keeps a stable source ID, so a re-sync never brings back a checked task.
 - A source edit, such as a new due date, updates the pet's copy and keeps its done status.
 - An item deleted at the source is flagged "removed from Canvas" instead of vanishing.
-- The Canvas feed carries no submission status. So for a Canvas task the pet asks, once after its due time and never during a focus block ("Did you submit it?") and when a focus block tied to it ends ("Finished it?"); a yes checks it off, and it can always be checked off by hand.
+- The Canvas feed carries no submission status. So for a Canvas task the pet asks, once after its due time and never while the focus keeper is on ("Did you submit it?"); a yes checks it off, and it can always be checked off by hand.
 - A typed task and its imported copy merge when the user confirms the pet's suggestion.
 - The user chooses which courses to show.
 
 **Reminders**
 
 - Timed by due date against the estimate, not by fixed alarms.
-- A reminder waits for a running focus block to end.
+- A reminder waits while the focus keeper is on.
 
 ## Privacy and security
 
@@ -257,11 +261,12 @@ The privacy gate sits at the start of the path, so a Private window is never nam
 
 ## Data model
 
-Nine record types cover the whole product, all stored in one local database.
+Ten record types cover the whole product, all stored in one local database.
 
 | Record | Key fields | Notes |
 | --- | --- | --- |
-| Session | start, end, planned length, break length, task | One per focus block |
+| Session | start, end, planned length, break length, task | One per focus block, from before 2026-10-13. None is added now |
+| Day total | day, Study seconds, Work seconds | One per finished day since 2026-10-13; rebuilt when an app rule changes |
 | App span | start, end, app name, bundle ID | The app in front; "Private" with no name for a Private app |
 | Activity span | start, end, site, address, title | An allowed page in front in Chrome |
 | Audio span | start, end | That sound was on, never what |
@@ -305,7 +310,7 @@ Success means the first user keeps the pet open every day and trusts what it sho
 | Metric | Target |
 | --- | --- |
 | Days the pet is opened | 6 of 7 |
-| Focus sessions per week | 10 or more |
+| Days per week that count toward the streak | 5 or more |
 | Returns within 2 minutes of a nudge | 60% or more |
 | Activity labels correct in a spot check | 90% or more |
 | Other to-do apps opened per week | Close to zero |
@@ -317,7 +322,7 @@ Success means the first user keeps the pet open every day and trusts what it sho
 
 - [x] Platform first: macOS. Windows is "Maybe later".
 - [x] Knowledge graph and timelapse: dropped on 2026-10-11.
-- [ ] Should Work time count toward the streak? Today only focus blocks count, whatever their label.
+- [x] Should Work time count toward the streak? Yes, since 2026-10-13: Study and Work both count.
 - [ ] The pet's name.
 
 | Risk | Impact | Mitigation |

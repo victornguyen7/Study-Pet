@@ -446,7 +446,7 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** a password field that is on screen but not being typed in is missed outside Chrome, and so is one inside a frame of a page. Private windows in Safari, Firefox and other browsers are not detected. Switching back to Chrome can cost one 5-second sample labeled the wrong way.
 - **Revisit when:** window titles are read, or the extension is built for another browser.
 
-### The focus keeper is on during a focus block only, and drift is what is Relax
+### The focus keeper is on during a focus block only, and drift is what is Relax (the first half replaced 2026-10-13, see the last section)
 - **Why:** built on 2026-10-07. The spec turns the keeper on for all Study and Work time. A focus block is the one moment the user has said "I mean to focus", so nudging only then cannot be wrong about the mode; declaring "relaxing" turns it off even then.
 - **Detail:** with each 5-second sample the monitor sends what the gate let through (the app, and the allowed page in front in Chrome) to `drift` in the sidecar, which knows whether a block is running. Drift is a Relax category or a Relax answer from the user, plus YouTube's home page, feeds and Shorts whatever was said about YouTube. Unknown and Private things are never drift.
 - **Detail:** `Drift` in `backend/drift.py` counts one unbroken stretch: step 1 at 30 s, 2 at 2 min, 3 at 5 min. The pet's lines give the time, what it went to and the task, nothing about the user.
@@ -514,3 +514,40 @@ The costs of these choices are collected, in order of risk, in `KNOWN_ISSUES.md`
 - **Gave up:** the pet's teal as the heatmap colour. The list under the bar is its legend, so no mode is told by colour alone.
 - **Revisit when:** the panel's surface colours change; run the validator again.
 
+## 2026-10-13 · Recording is automatic
+
+### The focus block is removed; Study and Work time counts by itself
+- **Why:** decided by the first user on 2026-10-13. A day counted only if Start was pressed, and on a day it was not, nothing counted: no streak, no heatmap square, no focus keeper. The pet already labels every stretch of the day, so it can count the time itself.
+- **Gave up:** the countdown, presets, the break timer with its call back, and a block started for one task. The streak is now only as good as the mode labels: an app nobody has answered for is uncounted time until it is answered.
+- **Revisit when:** the labels are wrong often enough that the streak cannot be trusted.
+
+### A finished day's totals are saved; today is labeled live
+- **Why:** the streak is asked for every minute, and labeling all of history each time grows without end. `day_total` holds a finished day's Study and Work seconds, written once. Any change to an app rule empties the table, so an answer given today still counts on earlier days.
+- **Gave up:** "nothing is stored" from "Modes are worked out when asked for, not stored on the spans". Spans are still not labeled in storage; only the two totals per day are kept.
+- **Revisit when:** a rule change gets slow after a long history; then label again only the days that had that app.
+
+### Days before the switch keep their focus-block minutes
+- **Why:** the streak and the heatmap must not change on the day of the update. The setting `auto_since` holds the first day recorded time counts; an earlier day has the minutes of its `session` rows, shown as Study.
+- **Gave up:** one rule for every day. A focus block on or after `auto_since` counts for nothing.
+- **Revisit when:** never, unless the old blocks are to be dropped.
+
+### The keeper turns itself on after 5 minutes, and off after a break
+- **Why:** with no block to mark "I am working", the pet has to tell by itself. On after 300 seconds of Study or Work, so a glance at a course page does not start it. Off after 900 seconds of Relax in a row, since by then the nudges have failed and it is a break; off after 300 seconds with no sample, the same limit that says nobody is at the laptop; off while the user has declared Relax. A break is suggested once per run, after 50 minutes by default.
+- **Gave up:** the pet now nudges without being asked to. Time that only adds up while the keeper is off is never worn down (`ponytail:` in `backend/drift.py`). "I'm relaxing" lasts until midnight, since no focus block takes it back.
+- **Replaces:** "The focus keeper is on during a focus block only".
+- **Revisit when:** it turns on too easily, or nags through what was meant as a break.
+
+### Time per task is dropped
+- **Why:** the pet cannot tell which task an app belongs to, and a guess would show wrong numbers.
+- **Gave up:** "45 min of 2 h" on a task, and the Start button on each. A task that had focus blocks before the switch still has that time taken off its work left in reminders (`tasks.rs`); no new time is ever added.
+- **Revisit when:** a way to tie time to a task without a press turns up.
+
+### The heatmap has two ramps
+- **Why:** a day is blue when it had more Study and orange when it had more Work; a tie is blue. The orange ramp is `#efa07a`, `#e97843`, `#c9501f`, `#8a3210` in light mode and `#a8431a`, `#d95926`, `#ea8a61`, `#f6c4ad` in dark. Both passed the dataviz validator's ordinal checks against `#ffffff` and `#18323b`, as the blue ramp does. The first try at the lightest light step, `#f4b393`, failed at 1.79:1 against the surface.
+- **Gave up:** showing a day's split. A day of 3 h Study and 3 h 5 min Work is plain orange; the recap under the heatmap has the split.
+- **Revisit when:** the panel's surface colours change; run the validator again.
+
+### The sidecar keeps `timer` and `drift` until the everyday app is reinstalled
+- **Why:** the app in `/Applications` starts Python from this source tree (`KNOWN_ISSUES.md`, item 33), so removing either method would stop its timer at once. The new rule went in beside them, as the class `Keeper` and the method `watch`.
+- **Gave up:** `backend/timer.py` and two unused methods stay in the tree for now.
+- **Revisit when:** the user asks for a reinstall; then delete them (the plan's Task 6).

@@ -2,6 +2,18 @@
 
 ## Unreleased · Phases 3 and 4
 
+**Changed (2026-10-13: recording is automatic)**
+- The pet counts Study and Work time by itself. The streak and the heatmap count that time, not focus blocks; days before 2026-10-13 keep the minutes they had. New table `day_total` and setting `auto_since`.
+- The heatmap is blue for a day with more Study and orange for one with more Work.
+- The focus keeper turns itself on after 5 minutes of Study or Work, and off after 15 minutes of Relax in a row, 5 minutes away, or "I'm relaxing". New sidecar method `watch` (`Keeper` in `backend/drift.py`); the "drift" event also says whether the keeper is on.
+- The pet suggests a break after 50 minutes of study or work, with the Glass sound. The length is in Settings under "Focus keeper"; 0 turns it off. `keeper` takes and returns `break_after`.
+- The pet's drift lines name the time and the site only, since there is no task or block to name.
+- `day` returns `{ minutes, modes, today, threshold }` and no longer `sessions`.
+
+**Removed (2026-10-13)**
+- The focus timer: the tank at the top of Today, presets, the break countdown and its call back, "Skip break", the Ping sound, the Start button on a task, "Finished it?", time spent on a task, "Today's focus blocks", and the pet's offer to start a block (S-7). Commands `timer`, `list_presets`, `add_preset` and `delete_preset`, the `timer` event and `src/timer.ts` are gone. The `session` and `preset` tables stay.
+- Recording no longer pauses during a break, since there are none.
+
 **Changed**
 - Wrap up is a recap of any day. A focus heatmap of the last 18 weeks replaces "Last 7 days"; a click on a day shows that day. "Time by mode" is one bar with its hours, and one list, "Apps and sites", gives a single total per app and site in place of "Sites today", "Apps today" and "Stretches". The browser's row counts only the time not under one of its sites.
 - A site is shown by name everywhere, never by address: a built-in list in `modes.rs` (`site_name`), else the first part of the address. This covers the recap, the pet's questions, its drift lines and "What the pet has learned".
