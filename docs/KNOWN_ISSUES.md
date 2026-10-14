@@ -225,6 +225,7 @@ Everything here was built in one day and checked by tests, a type check and a bu
     *Fix:* the two open items under "2026-10-13" in `ROADMAP.md`.
 85. **An old task keeps credit for old focus blocks.** `tasks.rs` still takes the time of a task's focus blocks from before 2026-10-13 off its work left, so its reminder comes later than a new task's would. The panel no longer shows that time.
     *Fix:* drop the subquery on `session` in `tasks` once no open task has old blocks.
+86. **Found in review on 2026-10-13, not fixed.** (a) Walking off with the lid open is a break only after about 10 minutes, not 5: samples stop after 5 minutes without input and the keeper counts 5 more from the last sample; until then the pet keeps its last state, sitting in the way if it was. (b) A break can be suggested in the middle of a drift. (c) Answering "What is this for?" does not redraw the streak or heatmap for up to a minute. (d) An answer given in the second between labeling a day and saving it leaves that day's old total until the next answer. (e) One day that fails to label would stop the streak and the heatmap from loading; no input that does this is known. (f) `days_to_total` reads every span each minute. (g) `button.primary` in `panel.css` has no user, and comments in `session.rs` and `sidecar.rs` still speak of the timer.
 
 ## Setup traps
 

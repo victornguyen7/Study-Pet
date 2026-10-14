@@ -253,7 +253,7 @@ pub(crate) fn start(app: AppHandle) {
                 // said once per run of study or work, then taken off so the windows are not told twice
                 if state["break"] == true {
                     crate::session::play_sound(&app, "Glass");
-                    let _ = app.emit("reminder", format!("You've been at it for {after} minutes. Take a break?"));
+                    let _ = app.emit("break", format!("You've been at it for {after} minutes. Take a break?"));
                 }
                 if let Some(state) = state.as_object_mut() {
                     state.remove("break");

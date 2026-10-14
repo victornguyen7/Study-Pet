@@ -776,6 +776,11 @@ mod tests {
         save_day_total(&conn, &day(2), &json!({ "study": 600, "work": 1800.0, "relax": 9999 })).unwrap();
         save_day_total(&conn, &day(1), &json!({ "relax": 500 })).unwrap(); // a day of Relax only
         assert!(days_to_total(&conn).unwrap().is_empty()); // neither is labeled again
+        // a span that began yesterday and is still growing: its day is totalled again until it stops
+        conn.execute("INSERT INTO app_span (started_at, ended_at, app) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'Preview')", [noon(1).0]).unwrap();
+        assert_eq!(days_to_total(&conn).unwrap(), [day(1)]);
+        conn.execute("UPDATE app_span SET ended_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-5 minutes') WHERE id = last_insert_rowid()", []).unwrap();
+        assert!(days_to_total(&conn).unwrap().is_empty());
 
         let input = streak_input(&conn, &json!({ "study": 1200.0, "work": 300 })).unwrap();
         assert_eq!(

@@ -127,12 +127,14 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 /// Finished days since the switch that have something noted and no saved total yet, oldest first.
+/// A day with a span that was still growing two minutes ago is listed again: work that runs past
+/// midnight in one app belongs to the day it began, and that day's total has to follow it until it stops.
 pub(crate) fn days_to_total(conn: &Connection) -> rusqlite::Result<Vec<String>> {
     conn.prepare(
         "SELECT DISTINCT date(started_at, 'localtime') AS d
-         FROM (SELECT started_at FROM app_span UNION ALL SELECT started_at FROM activity_span)
+         FROM (SELECT started_at, ended_at FROM app_span UNION ALL SELECT started_at, ended_at FROM activity_span)
          WHERE d >= (SELECT value FROM setting WHERE key = 'auto_since') AND d < date('now', 'localtime')
-           AND d NOT IN (SELECT day FROM day_total)
+           AND (d NOT IN (SELECT day FROM day_total) OR unixepoch(ended_at) > unixepoch('now') - 120)
          ORDER BY 1",
     )?
     .query_map([], |r| r.get(0))?

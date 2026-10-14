@@ -28,13 +28,20 @@ pet.addEventListener("click", () => {
 });
 
 // One line from Rust for the bubble: a task that has become due soon, an imported one that may have
-// been handed in (take_reminder in src-tauri/src/tasks.rs), a question about an app, or "take a
-// break". Rust sends none of the first three while the keeper is on. It stays until the pet is
-// clicked or the keeper next turns on.
+// been handed in (take_reminder in src-tauri/src/tasks.rs), or a question about an app. Rust sends
+// none while the keeper is on. It stays until the pet is clicked or the keeper next turns on.
 let reminder = "";
 listen<string>("reminder", (e) => {
   reminder = e.payload;
   getCurrentWindow().show();
+});
+// "Take a break?", said with a sound after a long run of work. It goes by itself after a minute:
+// left up, it would sit in the bubble for as long as the user kept working.
+let breakNote = "";
+listen<string>("break", (e) => {
+  breakNote = e.payload;
+  getCurrentWindow().show();
+  setTimeout(() => (breakNote = ""), 60_000);
 });
 
 // The window is exactly the slime (120 x 80, as in pet.css and tauri.conf.json). It grows up and
@@ -164,7 +171,7 @@ function render() {
   pet.classList.toggle("nudging", on && drift.step >= 2 && !welcome);
   pet.classList.toggle("happy", welcome);
   if (!on) sit(false); // the keeper let go, or the pet was told to look away
-  const text = nudge() || reminder;
+  const text = nudge() || breakNote || reminder;
   bubble.textContent = text;
   if (!text) bubble.hidden = true; // hide before shrinking, show after growing
   resize(!!text).then(() => (bubble.hidden = !text));
